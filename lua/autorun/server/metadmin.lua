@@ -243,7 +243,7 @@ function metadmin.profile(call,sid)
 			net.WriteTable(tab)
 		net.Send(call)
 	else
-		GetDataSID(sid,function() profile(call,sid) end,true)
+		GetDataSID(sid,function() metadmin.profile(call,sid) end,true)
 	end
 end
 
