@@ -334,6 +334,7 @@ function AddExamInfo(sid,rank,adminsid,note,type)
 end
 
 local badpl = true
+local synch = true
 function GetDataSID(sid,cb,nocreate)
 	sid = db:escape(sid)
 	GetData(sid, function(data)
@@ -344,6 +345,9 @@ function GetDataSID(sid,cb,nocreate)
 			if badpl then
 				http.Fetch( "http://metrostroi.net/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
 			end
+			if synch then
+				http.Fetch( "http://metrostroi.net/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
+			end
 			local target = player.GetBySteamID(sid)
 			if target then
 				if target:GetUserGroup() != data[1].group then
@@ -353,21 +357,21 @@ function GetDataSID(sid,cb,nocreate)
 					ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,data[1].group)
 				end
 			end
+			GetViolations(sid, function(data)
+				metadmin.players[sid].violations = data
+			end)
+			GetExamInfo(sid, function(data)
+				metadmin.players[sid].exam = data
+			end)
+			GetTests(sid, function(data)
+				metadmin.players[sid].exam_answers = data
+			end)
+			if cb then
+				timer.Simple(0.25,function() cb() end)
+			end
 		else
 			if nocreate then return end
 			CreateData(sid)
-		end
-		GetViolations(sid, function(data)
-			metadmin.players[sid].violations = data
-		end)
-		GetExamInfo(sid, function(data)
-			metadmin.players[sid].exam = data
-		end)
-		GetTests(sid, function(data)
-			metadmin.players[sid].exam_answers = data
-		end)
-		if cb then
-			timer.Simple(0.25,function() cb() end)
 		end
 	end)
 end

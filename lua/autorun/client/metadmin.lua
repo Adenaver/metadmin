@@ -137,6 +137,77 @@ function metadmin.settings()
 	end
 end
 
+function metadmin.serversettings(tab)
+	local Frame = vgui.Create("DFrame")
+	Frame:SetSize(250,120)
+	Frame:SetTitle("Настройки сервера")
+	Frame:SetDraggable(true)
+	Frame.btnMaxim:SetVisible(false)
+	Frame.btnMinim:SetVisible(false)
+	Frame:MakePopup()
+	Frame:Center()
+	local DPanel = vgui.Create("DPanel",Frame)
+	DPanel:SetPos(5,30)
+	DPanel:SetSize(240,85)
+	DLabel:SetDark(1)
+	
+	local synch = vgui.Create("DCheckBoxLabel",Frame)
+	synch:SetPos(10,35)
+	synch:SetText("Синхронизация")
+	synch.Button.DoClick = function(self)
+	end
+	synch:SizeToContents()
+	
+	local badpl = vgui.Create("DCheckBoxLabel",Frame)
+	badpl:SetPos(135,35)
+	badpl:SetText("'Плохие' игроки")
+	badpl.Button.DoClick = function(self)
+	end
+	badpl:SizeToContents()
+	
+	local groupwrite = vgui.Create("DCheckBoxLabel",Frame)
+	groupwrite:SetPos(135,60)
+	groupwrite:SetText("Перезапись")
+	groupwrite:SetToolTip("Записывает группу при первом входе/Устанавливает user при первом входе")
+	groupwrite.Button.DoClick = function(self)
+	end
+	groupwrite:SizeToContents()
+	
+	local providertext = vgui.Create('DLabel',Frame)
+	providertext:SetPos(10,58)
+	providertext:SetText("Тип бд:")
+	providertext:SizeToContents()
+	
+	local provider = vgui.Create("DComboBox",Frame)
+	provider:SetPos(50,55)
+	provider:SetSize(65,20)
+	provider:AddChoice("sql")
+	provider:AddChoice("mysql")
+	provider.OnSelect = function(panel,index,value)
+	end
+	
+	local ranks = vgui.Create("DButton",Frame)
+	ranks:SetPos(10,90)
+	ranks:SetText("Ранги")
+	ranks:SetSize(70,20)
+	ranks.DoClick = function()
+	end
+	
+	local prom = vgui.Create("DButton",Frame)
+	prom:SetPos(90,90)
+	prom:SetText("Повышения")
+	prom:SetSize(70,20)
+	prom.DoClick = function()
+	end
+	
+	local dem = vgui.Create("DButton",Frame)
+	dem:SetPos(170,90)
+	dem:SetText("Понижения")
+	dem:SetSize(70,20)
+	dem.DoClick = function()
+	end
+end
+
 local opentime = 0
 hook.Add("Think","exammenu",function()
 	if not Access("ma.pl") then return end
@@ -389,6 +460,44 @@ function metadmin.profile(tab)
 	DPanel:SetPos(5,30)
 	DPanel:SetSize(590,80)
 	DLabel:SetDark(1)
+	if tab.synch then
+		local synch = vgui.Create("DImage",Frame)
+		if Access("ma.pl") then
+			synch:SetPos(484,3)
+		else
+			synch:SetPos(544,3)
+		end
+		synch:SetSize(16,16)
+		synch:SetImage((tab.synch.rank == tab.rank) and "icon16/tick.png" or "icon16/cross.png")
+		synch:SetToolTip((tab.synch.rank == tab.rank) and "Синхронизирован" or "Не синхронизирован")
+		synch:SetMouseInputEnabled(true)
+		local com = tab.synch.com and ("\nКомментарий: "..tab.synch.com) or ""
+		function synch:OnCursorEntered()
+			self:SetCursor("hand")
+		end
+		function synch:OnCursorExited()
+			self:SetCursor("arrow")
+		end
+		function synch:OnMouseReleased(code)
+			if (code == MOUSE_LEFT) then
+				if tab.synch.rank != tab.rank then
+					if Access("ulx setrank") then
+						if metadmin.ranks[tab.synch.rank] then
+							Derma_Query("Текущий ранг: "..tab.rank.."\nРеком. ранг: "..tab.synch.rank..com.."\nСинхронизировать?", "Синхронизация",
+								"Да", function() RunConsoleCommand("ulx","setrank",tab.SID,tab.synch.rank) Frame:Close() end,
+								"Нет")
+						else
+							Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованый ранг: "..tab.synch.rank..com.."\nСинхронизация невозможна, данный ранг отсутствует в системе.", "Синхронизация","Закрыть")
+						end
+					else
+						Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованый ранг: "..tab.synch.rank..com, "Синхронизация","Закрыть")
+					end
+				else
+					Derma_Query("Ранг: "..tab.synch.rank..com,"Синхронизация","Закрыть")
+				end
+			end
+		end
+	end
 	if Access("ma.pl") then
 		local DButton = vgui.Create("DButton",Frame)
 		DButton:SetPos(504,3)

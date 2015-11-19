@@ -156,6 +156,7 @@ function AddExamInfo(sid,rank,adminsid,note,type)
 end
 
 local badpl = true
+local synch = true
 function GetDataSID(sid,cb,nocreate)
 	GetData(sid, function(data)
 		if data and data[1] then
@@ -164,6 +165,9 @@ function GetDataSID(sid,cb,nocreate)
 			metadmin.players[sid].status = util.JSONToTable(data[1].status)
 			if badpl then
 				http.Fetch( "http://metrostroi.net/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
+			end
+			if synch then
+				http.Fetch( "http://metrostroi.net/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
 			end
 			local target = player.GetBySteamID(sid)
 			if target then

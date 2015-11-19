@@ -1,5 +1,5 @@
 --Говно-код присутствует
-local path = "providers/" .. metadmin.provider .. ".lua"
+local path = "metadmin/providers/" .. metadmin.provider .. ".lua"
 if not file.Exists(path, "LUA") then
 	error("Не найдено. " .. path)
 	return
@@ -237,8 +237,9 @@ function metadmin.profile(call,sid)
 		tab.rank = metadmin.players[sid].rank
 		tab.SID = sid
 		tab.Nick = GetNick(sid,"UNKNOWN")
-		tab.badpl = metadmin.players[sid].badpl
 		tab.nvio = #metadmin.players[sid].violations
+		tab.badpl = metadmin.players[sid].badpl
+		tab.synch = metadmin.players[sid].synch
 		net.Start("metadmin.profile")
 			net.WriteTable(tab)
 		net.Send(call)
@@ -255,10 +256,10 @@ function metadmin.setrank(call,sid,rank)
 			end
 		end 
 	end
-	if not string.match( sid,"(STEAM_[0-5]:[01]:%d+)") then return end
+	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	if metadmin.players[sid] then
 		if metadmin.ranks[rank] then
-			if metadmin.players[sid].rank == rank then return end
+			if metadmin.players[sid].rank == rank then call:ChatPrint("Что ты пытаешься сделать? Ранги идентичны!") return end
 			metadmin.players[sid].rank = rank
 			SaveData(sid)
 			local target = player.GetBySteamID(sid)
@@ -280,6 +281,8 @@ function metadmin.setrank(call,sid,rank)
 					metadmin.players[sid].exam = data
 				end)
 			end)
+		else
+			call:ChatPrint("Ранг "..rank.." отсутствует в metadmin!")
 		end
 	else
 		GetDataSID(sid,function() metadmin.setrank(call,sid,rank) end,true)

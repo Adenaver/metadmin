@@ -27,6 +27,7 @@ metadmin.dem = {
 metadmin.plombs = {
 	["KAH"] = "КАХ",
 	["VAH"] = "ВАХ",
+	["VAD"] = "ВАД",
 	["RC1"] = "РЦ-1",
 	["UOS"] = "РЦ-УОС",
 	["OtklAVU"] = "ОтклАВУ",
