@@ -8,7 +8,8 @@ local function Start()
 		`sid` text NOT NULL,
 		`date` text NOT NULL,
 		`questions` text NOT NULL,
-		`status` int(11) NOT NULL DEFAULT '0'
+		`status` int(11) NOT NULL DEFAULT '0',
+		`answers` text NOT NULL
 		)]])
 	end
 	if not sql.TableExists("examinfo") then
