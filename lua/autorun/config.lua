@@ -3,6 +3,7 @@ metadmin.server = "SERVER"
 metadmin.category = "MetrostroiAdmin"
 metadmin.groupwrite = false -- Записывает группу при первом входе(true)/Устанавливает user при первом входе(false)
 metadmin.provider = "sql" -- mysql,sql
+metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX" -- Ключ сервера
 metadmin.ranks = {
 	["driver3class"] = "Машинист 3 класса",
 	["driver2class"] = "Машинист 2 класса",
@@ -14,6 +15,7 @@ metadmin.ranks = {
 	["instructor"] = "Машинист инструктор",
 	["superadmin"] = "Начальник метрополитена"
 }
+metadmin.disp = "admin"
 metadmin.prom = {
 	["user"] = "driver3class",
 	["driver3class"] = "driver2class",
@@ -34,3 +36,9 @@ metadmin.plombs = {
 	["A5"] = "A5"
 }
 metadmin.pogona = {}
+
+----
+metadmin.ranks1 = {}
+for k,v in pairs(metadmin.ranks) do
+	table.Add(metadmin.ranks1,{k})
+end

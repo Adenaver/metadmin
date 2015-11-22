@@ -1,4 +1,3 @@
--- Первый раз работаю с sql, возможен пиздец
 metadmin.players = metadmin.players or {}
 
 local function Start()
@@ -52,19 +51,19 @@ local function Start()
 	end
 end
 Start()
-function GetData(sid,cb)
+function metadmin.GetData(sid,cb)
     local result = sql.Query("SELECT * FROM players WHERE SID='"..sid.."'")
 	cb(result)
 end
 
-function SaveData(sid)
+function metadmin.SaveData(sid)
 	if not metadmin.players[sid] then return end
 	local rank = metadmin.players[sid].rank or "user"
 	local status = util.TableToJSON(metadmin.players[sid].status)
 	sql.Query("UPDATE `players` SET `group` = '"..rank.."',`status` = '"..status.."' WHERE `SID`="..sql.SQLStr(sid))
 end
 
-function CreateData(sid)
+function metadmin.CreateData(sid)
 	local status = "{\"date\":"..os.time()..",\"nom\":1,\"admin\":\"\"}"
 	local group = "user"
 	local ply = player.GetBySteamID(sid)
@@ -72,10 +71,7 @@ function CreateData(sid)
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
-			local userInfo = ULib.ucl.authed[ply:UniqueID()]
-			local id = ULib.ucl.getUserRegisteredID(ply)
-			if not id then id = ply:SteamID() end
-			ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,group)
+			metadmin.setulxrank(ply,group)
 		end
 	end
 	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."')")
@@ -87,13 +83,13 @@ function CreateData(sid)
 	metadmin.players[sid].status.date = os.time()
 end
 
-function GetQuestions(cb)
+function metadmin.GetQuestions(cb)
     local result = sql.Query("SELECT * FROM questions")
 	if not result then result = {} end
 	cb(result)
 end
 
-function SaveQuestion(id,questions,enabled)
+function metadmin.SaveQuestion(id,questions,enabled)
 	local table = ""
 	if questions then
 		table = "`questions` = '"..questions.."'"
@@ -106,15 +102,15 @@ function SaveQuestion(id,questions,enabled)
    sql.Query("UPDATE `questions` SET "..table..enbl.." WHERE `id`="..tonumber(id))
 end
 
-function RemoveQuestion(id)
+function metadmin.RemoveQuestion(id)
   sql.Query("DELETE FROM `questions` WHERE `id`='"..id.."'")
 end
 
-function AddQuestion(name)
+function metadmin.AddQuestion(name)
     sql.Query("INSERT INTO `questions` (`id`,`name`,`questions`,`enabled`) VALUES (NULL,"..sql.SQLStr(name)..",'{}','0')")
 end
 
-function GetTests(sid,cb)
+function metadmin.GetTests(sid,cb)
 	local result = sql.Query("SELECT * FROM answers WHERE SID="..sql.SQLStr(sid).." ORDER BY id DESC")
 	if not result then result = {} else
 		for k,v in pairs(result) do
@@ -124,76 +120,34 @@ function GetTests(sid,cb)
 	cb(result)
 end
 
-function AddTest(sid,ques,ans)
+function metadmin.AddTest(sid,ques,ans)
 	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..")")
 end
 
-function SetStatusTest(id,status)
+function metadmin.SetStatusTest(id,status)
 	sql.Query("UPDATE `answers` SET `status` = '"..status.."' WHERE `id`='"..tonumber(id).."'")
 end
 
-function GetViolations(sid,cb)
+function metadmin.GetViolations(sid,cb)
 	local result = sql.Query("SELECT * FROM `violations` WHERE SID="..sql.SQLStr(sid).." ORDER BY id DESC")
 	if not result then result = {} end
 	cb(result)
 end
 
-function AddViolation(sid,adminsid,violation)
+function metadmin.AddViolation(sid,adminsid,violation)
 	if not adminsid then adminsid = "CONSOLE" end
 	result = sql.Query("INSERT INTO `violations` (`id`,`SID`,`date`,`admin`,`server`,`violation`) VALUES (NULL,'"..sid.."','"..os.time().."','"..adminsid.."','"..metadmin.server.."',"..sql.SQLStr(violation)..")")
 end
 
-function RemoveViolation(id)
+function metadmin.RemoveViolation(id)
 	sql.Query("DELETE FROM `violations` WHERE `id`="..id)
 end
 
-function GetExamInfo(sid,cb)
+function metadmin.GetExamInfo(sid,cb)
 	local result = sql.Query("SELECT * FROM  `examinfo` WHERE SID="..sql.SQLStr(sid).." ORDER BY id DESC")
 	if not result then result = {} end
 	cb(result)
 end
-function AddExamInfo(sid,rank,adminsid,note,type)
+function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 	sql.Query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..sid.."','"..os.time().."','"..rank.."','"..adminsid.."',"..sql.SQLStr(note)..",'"..type.."','"..metadmin.server.."')")
-end
-
-local badpl = true
-local synch = true
-function GetDataSID(sid,cb,nocreate)
-	GetData(sid, function(data)
-		if data and data[1] then
-			metadmin.players[sid] = {}
-			metadmin.players[sid].rank = data[1].group
-			metadmin.players[sid].status = util.JSONToTable(data[1].status)
-			if badpl then
-				http.Fetch( "http://metrostroi.net/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
-			end
-			if synch then
-				http.Fetch( "http://metrostroi.net/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
-			end
-			local target = player.GetBySteamID(sid)
-			if target then
-				if target:GetUserGroup() != data[1].group then
-					local userInfo = ULib.ucl.authed[target:UniqueID()]
-					local id = ULib.ucl.getUserRegisteredID(target)
-					if not id then id = sid end
-					ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,data[1].group)
-				end
-			end
-		else
-			if nocreate then return end
-			CreateData(sid)
-		end
-		GetViolations(sid, function(data)
-			metadmin.players[sid].violations = data
-		end)
-		GetExamInfo(sid, function(data)
-			metadmin.players[sid].exam = data
-		end)
-		GetTests(sid, function(data)
-			metadmin.players[sid].exam_answers = data
-		end)
-		if cb then
-			timer.Simple(0.25,function() cb() end)
-		end
-	end)
 end

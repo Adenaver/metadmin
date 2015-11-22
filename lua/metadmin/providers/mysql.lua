@@ -15,7 +15,7 @@ end
 db:connect()
 metadmin.players = metadmin.players or {}
 
-function GetData(sid,cb)
+function metadmin.GetData(sid,cb)
     local q = db:query("SELECT * FROM players WHERE SID='"..db:escape(sid).."'")
     q.onSuccess = function(self, data)
 		cb(data)
@@ -37,7 +37,7 @@ function GetData(sid,cb)
     q:start()
 end
 
-function SaveData(sid)
+function metadmin.SaveData(sid)
 	if not metadmin.players[sid] then return end
 	local rank = metadmin.players[sid].rank or "user"
 	local status = util.TableToJSON(metadmin.players[sid].status)
@@ -63,7 +63,7 @@ function SaveData(sid)
     q:start()
 end
 
-function CreateData(sid)
+function metadmin.CreateData(sid)
 	local status = "{\"date\":"..os.time()..",\"nom\":1,\"admin\":\"\"}"
 	local group = "user"
 	local ply = player.GetBySteamID(sid)
@@ -71,10 +71,7 @@ function CreateData(sid)
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
-			local userInfo = ULib.ucl.authed[ply:UniqueID()]
-			local id = ULib.ucl.getUserRegisteredID(ply)
-			if not id then id = ply:SteamID() end
-			ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,group)
+			metadmin.setulxrank(ply,group)
 		end
 	end
 	metadmin.players[sid] = {}
@@ -100,7 +97,7 @@ function CreateData(sid)
     q:start()
 end
 
-function GetQuestions(cb)
+function metadmin.GetQuestions(cb)
     local q = db:query("SELECT * FROM questions")
     q.onSuccess = function(self, data)
 		cb(data)
@@ -122,7 +119,7 @@ function GetQuestions(cb)
     q:start()
 end
 
-function SaveQuestion(id,questions,enabled)
+function metadmin.SaveQuestion(id,questions,enabled)
 	local table = ""
 	if questions then
 		table = "`questions` = '"..questions.."'"
@@ -149,7 +146,7 @@ function SaveQuestion(id,questions,enabled)
     q:start()
 end
 
-function RemoveQuestion(id)
+function metadmin.RemoveQuestion(id)
   local q = db:query("DELETE FROM `questions` WHERE `id`='"..id.."'")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -167,7 +164,7 @@ function RemoveQuestion(id)
     q:start()
 end
 
-function AddQuestion(name)
+function metadmin.AddQuestion(name)
     local q = db:query("INSERT INTO `questions` (`name`,`questions`,`enabled`) VALUES ('"..db:escape(name).."','{}','0')")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -185,7 +182,7 @@ function AddQuestion(name)
     q:start()
 end
 
-function GetTests(sid,cb)
+function metadmin.GetTests(sid,cb)
     local q = db:query("SELECT * FROM answers WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
     q.onSuccess = function(self, data)
 		cb(data)
@@ -206,7 +203,7 @@ function GetTests(sid,cb)
 	q:start()
 end
 
-function AddTest(sid,ques,ans)
+function metadmin.AddTest(sid,ques,ans)
     local q = db:query("INSERT INTO `answers` (`sid`,`date`,`questions`,`answers`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."')")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -224,7 +221,7 @@ function AddTest(sid,ques,ans)
     q:start()
 end
 
-function SetStatusTest(id,status)
+function metadmin.SetStatusTest(id,status)
     local q = db:query("UPDATE `answers` SET `status` = '"..tonumber(status).."' WHERE `id`='"..tonumber(id).."'")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -242,7 +239,7 @@ function SetStatusTest(id,status)
     q:start()
 end
 
-function GetViolations(sid,cb)
+function metadmin.GetViolations(sid,cb)
 	local q = db:query("SELECT * FROM  `violations` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
@@ -262,7 +259,7 @@ function GetViolations(sid,cb)
 	q:start()
 end
 
-function AddViolation(sid,adminsid,violation)
+function metadmin.AddViolation(sid,adminsid,violation)
 	if not adminsid then adminsid = "CONSOLE" end
 	local q = db:query("INSERT INTO `violations` (`SID`,`date`,`admin`,`server`,`violation`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..adminsid.."','"..db:escape(metadmin.server).."','"..db:escape(violation).."')")
 	q.onError = function(err, sql)
@@ -280,7 +277,7 @@ function AddViolation(sid,adminsid,violation)
 	q:start()
 end
 
-function RemoveViolation(id)
+function metadmin.RemoveViolation(id)
 	local q = db:query("DELETE FROM `violations` WHERE `id`='"..id.."'")
 	q.onError = function(err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -297,7 +294,7 @@ function RemoveViolation(id)
 	q:start()
 end
 
-function GetExamInfo(sid,cb)
+function metadmin.GetExamInfo(sid,cb)
 	local q = db:query("SELECT * FROM  `examinfo` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
@@ -316,7 +313,7 @@ function GetExamInfo(sid,cb)
 	end
 	q:start()
 end
-function AddExamInfo(sid,rank,adminsid,note,type)
+function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 	local q = db:query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..rank.."','"..adminsid.."','"..db:escape(note).."','"..type.."','"..db:escape(metadmin.server).."')")
 	q.onError = function(err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
@@ -331,47 +328,4 @@ function AddExamInfo(sid,rank,adminsid,note,type)
 		q:start()
 	end
 	q:start()
-end
-
-local badpl = true
-local synch = true
-function GetDataSID(sid,cb,nocreate)
-	sid = db:escape(sid)
-	GetData(sid, function(data)
-		if data[1] then
-			metadmin.players[sid] = {}
-			metadmin.players[sid].rank = data[1].group
-			metadmin.players[sid].status = util.JSONToTable(data[1].status)
-			if badpl then
-				http.Fetch( "http://metrostroi.net/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
-			end
-			if synch then
-				http.Fetch( "http://metrostroi.net/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
-			end
-			local target = player.GetBySteamID(sid)
-			if target then
-				if target:GetUserGroup() != data[1].group then
-					local userInfo = ULib.ucl.authed[target:UniqueID()]
-					local id = ULib.ucl.getUserRegisteredID(target)
-					if not id then id = sid end
-					ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,data[1].group)
-				end
-			end
-			GetViolations(sid, function(data)
-				metadmin.players[sid].violations = data
-			end)
-			GetExamInfo(sid, function(data)
-				metadmin.players[sid].exam = data
-			end)
-			GetTests(sid, function(data)
-				metadmin.players[sid].exam_answers = data
-			end)
-			if cb then
-				timer.Simple(0.25,function() cb() end)
-			end
-		else
-			if nocreate then return end
-			CreateData(sid)
-		end
-	end)
 end

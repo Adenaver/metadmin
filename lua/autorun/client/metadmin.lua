@@ -57,7 +57,7 @@ function metadmin.menu()
 			header.PaintOver = function() surface.SetDrawColor(0,0,0,50) surface.DrawRect(0,0,header:GetWide(),header:GetTall()) end
 		
 			local row = menu:AddOption("Профиль", function()
-				RunConsoleCommand("ulx","pr",line:GetValue(3))
+				RunConsoleCommand("ulx","prid",line:GetValue(3))
 				Frame:Close()
 			end)
 			row:SetIcon("icon16/information.png")
@@ -76,6 +76,18 @@ function metadmin.menu()
 						end)
 						row:SetTextInset(10,0)
 					end
+			if Access("ulx setrankid") then
+				local sub, row = menu:AddSubMenu("Установить ранг")
+				row:SetIcon("icon16/lightning_go.png")
+				row:SetTextInset(10,0)
+				for k,v in pairs(metadmin.ranks) do
+					local row = sub:AddOption(v, function()
+						RunConsoleCommand("ulx","setrankid",line:GetValue(3),k)
+						Frame:Close()
+					end)
+					row:SetTextInset(10,0)
+				end
+			end
 			
 			local row = menu:AddOption("Отмена")
 			row:SetIcon("icon16/cancel.png")
@@ -89,7 +101,7 @@ function metadmin.menu()
 		end
 	else
 		playerslist.DoDoubleClick = function(parent,index,list)
-			RunConsoleCommand("ulx","pr",list:GetValue(3))
+			RunConsoleCommand("ulx","prid",list:GetValue(3))
 			Frame:Close()
 		end
 	end
@@ -468,8 +480,9 @@ function metadmin.profile(tab)
 			synch:SetPos(544,3)
 		end
 		synch:SetSize(16,16)
-		synch:SetImage((tab.synch.rank == tab.rank) and "icon16/tick.png" or "icon16/cross.png")
-		synch:SetToolTip((tab.synch.rank == tab.rank) and "Синхронизирован" or "Не синхронизирован")
+		local synched = tab.synch.rank == tab.rank
+		synch:SetImage(synched and "icon16/tick.png" or "icon16/cross.png")
+		synch:SetToolTip(synched and "Синхронизирован" or "Не синхронизирован")
 		synch:SetMouseInputEnabled(true)
 		local com = tab.synch.com and ("\nКомментарий: "..tab.synch.com) or ""
 		function synch:OnCursorEntered()
@@ -480,11 +493,11 @@ function metadmin.profile(tab)
 		end
 		function synch:OnMouseReleased(code)
 			if (code == MOUSE_LEFT) then
-				if tab.synch.rank != tab.rank then
+				if not synched then
 					if Access("ulx setrank") then
 						if metadmin.ranks[tab.synch.rank] then
 							Derma_Query("Текущий ранг: "..tab.rank.."\nРеком. ранг: "..tab.synch.rank..com.."\nСинхронизировать?", "Синхронизация",
-								"Да", function() RunConsoleCommand("ulx","setrank",tab.SID,tab.synch.rank) Frame:Close() end,
+								"Да", function() RunConsoleCommand("ulx","setrankid",tab.SID,tab.synch.rank) Frame:Close() end,
 								"Нет")
 						else
 							Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованый ранг: "..tab.synch.rank..com.."\nСинхронизация невозможна, данный ранг отсутствует в системе.", "Синхронизация","Закрыть")
@@ -582,7 +595,7 @@ function metadmin.profile(tab)
 							net.WriteString(v.id)
 						net.SendToServer()
 						Frame:Close()
-						RunConsoleCommand("ulx","pr",tab.SID)
+						RunConsoleCommand("ulx","prid",tab.SID)
 					end)
 					row:SetIcon("icon16/table_delete.png")
 					local row = menu:AddOption("Отмена")
