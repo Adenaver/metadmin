@@ -1,3 +1,9 @@
+net.Receive("metadmin.settings", function()
+	local tab = net.ReadTable()
+	for k,v in pairs(tab) do
+		metadmin[k] = v
+	end
+end)
 net.Receive("metadmin.profile", function()
 	metadmin.profile(net.ReadTable())
 end)
@@ -124,6 +130,11 @@ function metadmin.settings()
 	Frame.btnMinim:SetVisible(false)
 	Frame:MakePopup()
 	Frame:Center()
+	local serversettings = vgui.Create("DButton",Frame)
+	serversettings:SetPos(70,2.5)
+	serversettings:SetText("Настройки сервера")
+	serversettings:SetSize(110,20)
+	serversettings.DoClick = function() metadmin.serversettings() Frame:Close() end
 	local DPanel = vgui.Create("DPanel",Frame)
 	DPanel:SetPos(5,30)
 	DPanel:SetSize(210,50)
@@ -149,7 +160,8 @@ function metadmin.settings()
 	end
 end
 
-function metadmin.serversettings(tab)
+function metadmin.serversettings()
+	if not Access("ma.settings") then return end
 	local Frame = vgui.Create("DFrame")
 	Frame:SetSize(250,120)
 	Frame:SetTitle("Настройки сервера")
@@ -165,6 +177,7 @@ function metadmin.serversettings(tab)
 	
 	local synch = vgui.Create("DCheckBoxLabel",Frame)
 	synch:SetPos(10,35)
+	synch:SetDisabled(true)
 	synch:SetText("Синхронизация")
 	synch.Button.DoClick = function(self)
 	end
@@ -172,6 +185,7 @@ function metadmin.serversettings(tab)
 	
 	local badpl = vgui.Create("DCheckBoxLabel",Frame)
 	badpl:SetPos(135,35)
+	badpl:SetDisabled(true)
 	badpl:SetText("'Плохие' игроки")
 	badpl.Button.DoClick = function(self)
 	end
@@ -179,6 +193,7 @@ function metadmin.serversettings(tab)
 	
 	local groupwrite = vgui.Create("DCheckBoxLabel",Frame)
 	groupwrite:SetPos(135,60)
+	groupwrite:SetDisabled(true)
 	groupwrite:SetText("Перезапись")
 	groupwrite:SetToolTip("Записывает группу при первом входе/Устанавливает user при первом входе")
 	groupwrite.Button.DoClick = function(self)
@@ -186,11 +201,13 @@ function metadmin.serversettings(tab)
 	groupwrite:SizeToContents()
 	
 	local providertext = vgui.Create('DLabel',Frame)
+	providertext:SetDisabled(true)
 	providertext:SetPos(10,58)
 	providertext:SetText("Тип бд:")
 	providertext:SizeToContents()
 	
 	local provider = vgui.Create("DComboBox",Frame)
+	provider:SetDisabled(true)
 	provider:SetPos(50,55)
 	provider:SetSize(65,20)
 	provider:AddChoice("sql")
@@ -203,6 +220,100 @@ function metadmin.serversettings(tab)
 	ranks:SetText("Ранги")
 	ranks:SetSize(70,20)
 	ranks.DoClick = function()
+		Frame:Close()
+		local Frame = vgui.Create( "DFrame" )
+		Frame:SetSize(500,260)
+		Frame:SetTitle("Ранги")
+		Frame:SetDraggable(true)
+		Frame.btnMaxim:SetVisible(false)
+		Frame.btnMinim:SetVisible(false)
+		Frame:MakePopup()
+		Frame:Center()
+		
+		local list = vgui.Create("DListView",Frame)
+		list:SetPos(10,30)
+		list:SetSize(480,220)
+		list:SetMultiSelect(false)
+		local save = vgui.Create("DButton",Frame)
+		save:SetPos(390,2.5)
+		save:SetText("Сохранить")
+		save:SetSize(70,20)
+		save.DoClick = function()
+			local tab = {}
+			tab.ranks = {}
+			for k,v in pairs(list.Lines) do
+				tab.ranks[v:GetValue(1)] = v:GetValue(2)
+			end
+			net.Start("metadmin.settings")
+				net.WriteTable(tab)
+			net.SendToServer()
+			Frame:Close()
+		end
+		
+		list:AddColumn("ID")
+		list:AddColumn("Name")
+		
+		local add = vgui.Create("DButton",Frame)
+		add:SetPos(330,2.5)
+		add:SetText("Добавить")
+		add:SetSize(60,20)
+		add.DoClick = function() list:AddLine("новый","ранг") end
+		for k,v in pairs(metadmin.ranks) do
+			list:AddLine(k,v)
+		end
+		local menu
+		list.OnClickLine = function(panel,line)
+			if IsValid(menu) then menu:Remove() end
+			line:SetSelected(true)
+			menu = DermaMenu()
+			local header = menu:AddOption(line:GetValue(1).." - "..line:GetValue(2))
+			header:SetTextInset(10,0)
+			header.PaintOver = function() surface.SetDrawColor(0,0,0,50) surface.DrawRect(0,0,header:GetWide(),header:GetTall()) end
+		
+			local row = menu:AddOption("Изменить", function()
+				local Frame2 = vgui.Create("DFrame")
+				Frame2:SetSize(200,100)
+				Frame2:SetTitle(line:GetValue(1).." - "..line:GetValue(2))
+				Frame2:SetDraggable(true)
+				Frame2.btnMaxim:SetVisible(false)
+				Frame2.btnMinim:SetVisible(false)
+				Frame2:MakePopup()
+				Frame2:Center()
+				local text1 = vgui.Create("DTextEntry",Frame2)
+				text1:SetPos(5,30)
+				text1:SetText(line:GetValue(1))
+				text1:SetSize(190,20)
+				local text2 = vgui.Create("DTextEntry",Frame2)
+				text2:SetPos(5,50)
+				text2:SetText(line:GetValue(2))
+				text2:SetSize(190,20)
+				local edit = vgui.Create("DButton", Frame2)
+				edit:SetPos(5,75)
+				edit:SetText("Изменить")
+				edit:SetSize(190,20)
+				edit.DoClick = function()
+					line:SetValue(1,text1:GetValue())
+					line:SetValue(2,text2:GetValue())
+					Frame2:Close()
+				end
+			end)
+			row:SetIcon("icon16/pencil.png")
+		
+			local row = menu:AddOption("Удалить", function()
+				panel:RemoveLine(line:GetID())
+			end)
+			row:SetIcon("icon16/delete.png")
+		
+			local row = menu:AddOption("Отмена")
+			row:SetIcon("icon16/cancel.png")
+		
+			menu.Remove = function(m)
+				if IsValid(line) then
+					line:SetSelected(false)
+				end
+			end
+			menu:Open()
+		end
 	end
 	
 	local prom = vgui.Create("DButton",Frame)
@@ -210,6 +321,100 @@ function metadmin.serversettings(tab)
 	prom:SetText("Повышения")
 	prom:SetSize(70,20)
 	prom.DoClick = function()
+		Frame:Close()
+		local Frame = vgui.Create( "DFrame" )
+		Frame:SetSize(500,260)
+		Frame:SetTitle("Повышения")
+		Frame:SetDraggable(true)
+		Frame.btnMaxim:SetVisible(false)
+		Frame.btnMinim:SetVisible(false)
+		Frame:MakePopup()
+		Frame:Center()
+		
+		local list = vgui.Create("DListView",Frame)
+		list:SetPos(10,30)
+		list:SetSize(480,220)
+		list:SetMultiSelect(false)
+		local save = vgui.Create("DButton",Frame)
+		save:SetPos(390,2.5)
+		save:SetText("Сохранить")
+		save:SetSize(70,20)
+		save.DoClick = function()
+			local tab = {}
+			tab.prom = {}
+			for k,v in pairs(list.Lines) do
+				tab.prom[v:GetValue(1)] = v:GetValue(2)
+			end
+			net.Start("metadmin.settings")
+				net.WriteTable(tab)
+			net.SendToServer()
+			Frame:Close()
+		end
+		
+		list:AddColumn("Предыдущий ранг")
+		list:AddColumn("Следующий ранг")
+		
+		local add = vgui.Create("DButton",Frame)
+		add:SetPos(330,2.5)
+		add:SetText("Добавить")
+		add:SetSize(60,20)
+		add.DoClick = function() list:AddLine("новый","ранг") end
+		for k,v in pairs(metadmin.prom) do
+			list:AddLine(k,v)
+		end
+		local menu
+		list.OnClickLine = function(panel,line)
+			if IsValid(menu) then menu:Remove() end
+			line:SetSelected(true)
+			menu = DermaMenu()
+			local header = menu:AddOption(line:GetValue(1).." - "..line:GetValue(2))
+			header:SetTextInset(10,0)
+			header.PaintOver = function() surface.SetDrawColor(0,0,0,50) surface.DrawRect(0,0,header:GetWide(),header:GetTall()) end
+		
+			local row = menu:AddOption("Изменить", function()
+				local Frame2 = vgui.Create("DFrame")
+				Frame2:SetSize(200,100)
+				Frame2:SetTitle(line:GetValue(1).." - "..line:GetValue(2))
+				Frame2:SetDraggable(true)
+				Frame2.btnMaxim:SetVisible(false)
+				Frame2.btnMinim:SetVisible(false)
+				Frame2:MakePopup()
+				Frame2:Center()
+				local text1 = vgui.Create("DTextEntry",Frame2)
+				text1:SetPos(5,30)
+				text1:SetText(line:GetValue(1))
+				text1:SetSize(190,20)
+				local text2 = vgui.Create("DTextEntry",Frame2)
+				text2:SetPos(5,50)
+				text2:SetText(line:GetValue(2))
+				text2:SetSize(190,20)
+				local edit = vgui.Create("DButton", Frame2)
+				edit:SetPos(5,75)
+				edit:SetText("Изменить")
+				edit:SetSize(190,20)
+				edit.DoClick = function()
+					line:SetValue(1,text1:GetValue())
+					line:SetValue(2,text2:GetValue())
+					Frame2:Close()
+				end
+			end)
+			row:SetIcon("icon16/pencil.png")
+		
+			local row = menu:AddOption("Удалить", function()
+				panel:RemoveLine(line:GetID())
+			end)
+			row:SetIcon("icon16/delete.png")
+		
+			local row = menu:AddOption("Отмена")
+			row:SetIcon("icon16/cancel.png")
+		
+			menu.Remove = function(m)
+				if IsValid(line) then
+					line:SetSelected(false)
+				end
+			end
+			menu:Open()
+		end
 	end
 	
 	local dem = vgui.Create("DButton",Frame)
@@ -217,6 +422,100 @@ function metadmin.serversettings(tab)
 	dem:SetText("Понижения")
 	dem:SetSize(70,20)
 	dem.DoClick = function()
+		Frame:Close()
+		local Frame = vgui.Create( "DFrame" )
+		Frame:SetSize(500,260)
+		Frame:SetTitle("Понижения")
+		Frame:SetDraggable(true)
+		Frame.btnMaxim:SetVisible(false)
+		Frame.btnMinim:SetVisible(false)
+		Frame:MakePopup()
+		Frame:Center()
+		
+		local list = vgui.Create("DListView",Frame)
+		list:SetPos(10,30)
+		list:SetSize(480,220)
+		list:SetMultiSelect(false)
+		local save = vgui.Create("DButton",Frame)
+		save:SetPos(390,2.5)
+		save:SetText("Сохранить")
+		save:SetSize(70,20)
+		save.DoClick = function()
+			local tab = {}
+			tab.dem = {}
+			for k,v in pairs(list.Lines) do
+				tab.dem[v:GetValue(1)] = v:GetValue(2)
+			end
+			net.Start("metadmin.settings")
+				net.WriteTable(tab)
+			net.SendToServer()
+			Frame:Close()
+		end
+		
+		list:AddColumn("Предыдущий ранг")
+		list:AddColumn("Следующий ранг")
+		
+		local add = vgui.Create("DButton",Frame)
+		add:SetPos(330,2.5)
+		add:SetText("Добавить")
+		add:SetSize(60,20)
+		add.DoClick = function() list:AddLine("новый","ранг") end
+		for k,v in pairs(metadmin.dem) do
+			list:AddLine(k,v)
+		end
+		local menu
+		list.OnClickLine = function(panel,line)
+			if IsValid(menu) then menu:Remove() end
+			line:SetSelected(true)
+			menu = DermaMenu()
+			local header = menu:AddOption(line:GetValue(1).." - "..line:GetValue(2))
+			header:SetTextInset(10,0)
+			header.PaintOver = function() surface.SetDrawColor(0,0,0,50) surface.DrawRect(0,0,header:GetWide(),header:GetTall()) end
+		
+			local row = menu:AddOption("Изменить", function()
+				local Frame2 = vgui.Create("DFrame")
+				Frame2:SetSize(200,100)
+				Frame2:SetTitle(line:GetValue(1).." - "..line:GetValue(2))
+				Frame2:SetDraggable(true)
+				Frame2.btnMaxim:SetVisible(false)
+				Frame2.btnMinim:SetVisible(false)
+				Frame2:MakePopup()
+				Frame2:Center()
+				local text1 = vgui.Create("DTextEntry",Frame2)
+				text1:SetPos(5,30)
+				text1:SetText(line:GetValue(1))
+				text1:SetSize(190,20)
+				local text2 = vgui.Create("DTextEntry",Frame2)
+				text2:SetPos(5,50)
+				text2:SetText(line:GetValue(2))
+				text2:SetSize(190,20)
+				local edit = vgui.Create("DButton", Frame2)
+				edit:SetPos(5,75)
+				edit:SetText("Изменить")
+				edit:SetSize(190,20)
+				edit.DoClick = function()
+					line:SetValue(1,text1:GetValue())
+					line:SetValue(2,text2:GetValue())
+					Frame2:Close()
+				end
+			end)
+			row:SetIcon("icon16/pencil.png")
+		
+			local row = menu:AddOption("Удалить", function()
+				panel:RemoveLine(line:GetID())
+			end)
+			row:SetIcon("icon16/delete.png")
+		
+			local row = menu:AddOption("Отмена")
+			row:SetIcon("icon16/cancel.png")
+		
+			menu.Remove = function(m)
+				if IsValid(line) then
+					line:SetSelected(false)
+				end
+			end
+			menu:Open()
+		end
 	end
 end
 
@@ -263,6 +562,7 @@ function metadmin.playeract(nick,sid,rank,Frame)
 					net.WriteString(text:GetValue())
 				net.SendToServer()
 				frame:Close()
+				RunConsoleCommand("ulx","prid",sid)
 			end
 			Frame:Close()
 		end)
@@ -275,6 +575,7 @@ function metadmin.playeract(nick,sid,rank,Frame)
 				net.WriteInt(7,5)
 			net.SendToServer()
 			Frame:Close()
+			RunConsoleCommand("ulx","prid",sid)
 		end)
 		row:SetIcon("icon16/tag_blue_add.png")
 		row = menu:AddOption("Забрать талон", function()
@@ -283,6 +584,7 @@ function metadmin.playeract(nick,sid,rank,Frame)
 				net.WriteInt(8,5)
 			net.SendToServer()
 			Frame:Close()
+			RunConsoleCommand("ulx","prid",sid)
 		end)
 		row:SetIcon("icon16/tag_blue_delete.png")
 	end
@@ -302,7 +604,8 @@ function metadmin.playeract(nick,sid,rank,Frame)
 					net.WriteInt(1,5)
 					net.WriteString(text:GetValue())
 				net.SendToServer()
-				frame2:Remove()
+				frame2:Close()
+				RunConsoleCommand("ulx","prid",sid)
 			end
 			text:RequestFocus()
 			frame2:MakePopup()
@@ -326,7 +629,8 @@ function metadmin.playeract(nick,sid,rank,Frame)
 					net.WriteInt(2,5)
 					net.WriteString(text:GetValue())
 				net.SendToServer()
-				frame2:Remove()
+				frame2:Close()
+				RunConsoleCommand("ulx","prid",sid)
 			end
 			text:RequestFocus()
 			frame2:MakePopup()
@@ -638,7 +942,7 @@ function metadmin.profile(tab)
 			local info = vgui.Create("DLabel",DPanel)
 			info:SetSize(574,15)
 			info:SetPos(5,5)
-			info:SetText(metadmin.ranks[v.rank].." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date).." | Экзаменатор: "..v.examiner.." | Сервер: "..v.server)
+			info:SetText(metadmin.ranks[v.rank] or v.rank.." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date).." | Экзаменатор: "..v.examiner.." | Сервер: "..v.server)
 			local note = vgui.Create("DTextEntry",DPanel)
 			note:SetPos(5,25)
 			note:SetSize(574,85)
@@ -801,6 +1105,9 @@ function metadmin.questionslist()
 					net.WriteInt(line.id,32)
 				net.SendToServer()
 				Frame:Close()
+				timer.Simple(0.25,function()
+					metadmin.questionslist()
+				end)
 			end)
 			row:SetIcon(line:GetValue(2)==0 and "icon16/table_row_insert.png"or"icon16/table_row_delete.png")
 		end
@@ -814,8 +1121,11 @@ function metadmin.questionslist()
 								net.WriteInt(2,5)
 								net.WriteInt(id,32)
 							net.SendToServer()
+							timer.Simple(0.25,function()
+								metadmin.questionslist()
+							end)
 					end,
-					'Нет', function() questionslist() end
+					'Нет', function() metadmin.questionslist() end
 				)
 				Frame:Close()
 			end)
@@ -856,7 +1166,7 @@ function metadmin.questionsadd()
 			net.WriteInt(0,32)
 			net.WriteString(value)
 		net.SendToServer()
-		timer.Simple(1,function()
+		timer.Simple(0.25,function()
 			metadmin.questionslist()
 		end)
 		frame2:Remove()

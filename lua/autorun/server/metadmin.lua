@@ -5,6 +5,30 @@ if not file.Exists(path, "LUA") then
 	return
 end
 include(path)
+util.AddNetworkString("metadmin.settings")
+local function start()
+	if not file.Exists("metadmin","DATA") then
+		file.CreateDir("metadmin")
+	end
+	if not file.Exists("metadmin/settings.txt","DATA") then
+		file.Write("metadmin/settings.txt",'{"dem":{"driver2class":"driver3class","driver1class":"driver2class","driver3class":"user"},"prom":{"user":"driver3class","driver2class":"driver1class","driver3class":"driver2class"},"ranks":{"driver2class":"Машинист 2 класса","chiefinstructor":"Главный инструктор","user":"Помощник машиниста","auditor":"Ревизор","driver1class":"Машинист 1 класса","admin":"Поездной диспетчер","superadmin":"Начальник метрополитена","instructor":"Машинист инструктор","driver3class":"Машинист 3 класса"}}')
+		local tab = util.JSONToTable(file.Read("metadmin/settings.txt","DATA"))
+		metadmin.ranks = tab.ranks
+		metadmin.prom = tab.prom
+		metadmin.dem = tab.dem
+	else
+		local tab = util.JSONToTable(file.Read("metadmin/settings.txt","DATA"))
+		metadmin.ranks = tab.ranks
+		metadmin.prom = tab.prom
+		metadmin.dem = tab.dem
+	end
+	metadmin.ranks1 = {}
+	for k,v in pairs(metadmin.ranks) do
+		table.Add(metadmin.ranks1,{k})
+	end
+end
+start()
+ 
 metadmin.players = metadmin.players or {}
 util.AddNetworkString("metadmin.profile")
 util.AddNetworkString("metadmin.violations")
@@ -21,7 +45,7 @@ for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
 end
 
-local questionstab = {}
+metadmin.questions = metadmin.questions or {}
 hook.Add( "InitPostEntity", "init", function()
 	ULib.ucl.registerAccess("ma.pl", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню с игроками.",metadmin.category)
 	ULib.ucl.registerAccess("ma.questionsmenu", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню вопросов.",metadmin.category)
@@ -44,15 +68,16 @@ hook.Add( "InitPostEntity", "init", function()
 	ULib.ucl.registerAccess("ma.viewtalon", ULib.ACCESS_SUPERADMIN, "Просмотр талона.",metadmin.category)
 	ULib.ucl.registerAccess("ma.setstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.",metadmin.category)
 	ULib.ucl.registerAccess("ma.order", ULib.ACCESS_SUPERADMIN, "Доступ к приказам.",metadmin.category)
+	ULib.ucl.registerAccess("ma.settings", ULib.ACCESS_SUPERADMIN, "Доступ к настройкам.",metadmin.category)
 	timer.Simple(2.5, function()
 		metadmin.GetQuestions(
 			function(data)
 				for k, v in pairs(data) do
 					id = tonumber(v.id)
-					questionstab[id] = {}
-					questionstab[id].name = v.name
-					questionstab[id].questions = util.JSONToTable(v.questions)
-					questionstab[id].enabled = tonumber(v.enabled)
+					metadmin.questions[id] = {}
+					metadmin.questions[id].name = v.name
+					metadmin.questions[id].questions = util.JSONToTable(v.questions)
+					metadmin.questions[id].enabled = tonumber(v.enabled)
 				end
 			end
 		)
@@ -76,23 +101,30 @@ end)
 local function spawn(ply)
 	if ULib.ucl.query(ply,"ma.pl") then
 		net.Start("metadmin.questionstab")
-			net.WriteTable(questionstab)
+			net.WriteTable(metadmin.questions)
 		net.Send(ply)
 	end
 end
 
-hook.Add("PlayerInitialSpawn", "questions", function(ply) metadmin.GetDataSID(ply:SteamID()) spawn(ply) ply.plombs = {} end)
+hook.Add("PlayerInitialSpawn", "questions", function(ply)
+	metadmin.GetDataSID(ply:SteamID())
+	spawn(ply)
+	net.Start("metadmin.settings")
+		net.WriteTable({ranks = metadmin.ranks,prom = metadmin.prom,dem = metadmin.dem,ranks1 = metadmin.ranks1})
+	net.Send(ply)
+	ply.plombs = {}
+end)
 
 function refreshquestions()
-	questionstab = {}
+	metadmin.questions = {}
 	metadmin.GetQuestions(
 		function(data)
 			for k, v in pairs(data) do
 				id = tonumber(v.id)
-				questionstab[id] = {}
-				questionstab[id].name = v.name
-				questionstab[id].questions = util.JSONToTable(v.questions)
-				questionstab[id].enabled = tonumber(v.enabled)
+				metadmin.questions[id] = {}
+				metadmin.questions[id].name = v.name
+				metadmin.questions[id].questions = util.JSONToTable(v.questions)
+				metadmin.questions[id].enabled = tonumber(v.enabled)
 			end
 			for k, v in pairs(player.GetAll()) do
 				spawn(v)
@@ -120,7 +152,7 @@ net.Receive( "metadmin.action", function(len, ply)
 	elseif action == 2 and ULib.ucl.query(ply,"ma.demote") then
 		metadmin.demotion(ply,sid,str)
 	elseif action == 3 and ULib.ucl.query(ply,"ma.starttest") then
-		metadmin.questions(ply,sid,tonumber(str))
+		metadmin.sendquestions(ply,sid,tonumber(str))
 	elseif action == 4 and ULib.ucl.query(ply,"ma.viewresults") then
 		metadmin.view_answers(ply,sid,tonumber(str))
 	elseif action == 5 and ULib.ucl.query(ply,"ma.setstattest") then
@@ -134,6 +166,21 @@ net.Receive( "metadmin.action", function(len, ply)
 	elseif action == 8 and ULib.ucl.query(ply,"ma.settalon") then
 		metadmin.settalon(ply,sid,2)
 	end
+end)
+
+net.Receive("metadmin.settings", function(len, ply)
+	if not ULib.ucl.query(ply,"ma.settings") then return end
+	local tab = net.ReadTable()
+	for k,v in pairs(tab) do
+		metadmin[k] = v
+	end
+	for k,v in pairs(metadmin.ranks) do
+		table.Add(metadmin.ranks1,{k})
+	end
+	file.Write("metadmin/settings.txt",util.TableToJSON({ranks = metadmin.ranks,dem = metadmin.dem,prom = metadmin.prom}))
+	net.Start("metadmin.settings")
+		net.WriteTable({ranks = metadmin.ranks,prom = metadmin.prom,dem = metadmin.dem,ranks1 = metadmin.ranks1})
+	net.Send(ply)
 end)
 
 net.Receive( "metadmin.order", function(len, ply)
@@ -254,6 +301,7 @@ function metadmin.setulxrank(ply,rank)
 	local id = ULib.ucl.getUserRegisteredID(ply)
 	if not id then id = ply:SteamID() end
 	ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,rank)
+	--ply:SetUserGroup(rank)
 end
 
 function metadmin.setrank(call,sid,rank)
@@ -349,19 +397,19 @@ net.Receive( "metadmin.qaction", function(len, ply)
 	if not ULib.ucl.query(ply,"ma.questionsmenu") then return end
 	local action = net.ReadInt(5)
 	local id = net.ReadInt(32)
-	if action == 1 and questionstab[id] and ULib.ucl.query(ply,"ma.questionsimn") then
-		if questionstab[id].enabled == 1 then action = "отключен" else action = "включен" end
-		ply:ChatPrint("Шаблон "..questionstab[id].name.." успешно "..action)
-		metadmin.SaveQuestion(id,nil,questionstab[id].enabled == 1 and 0 or 1)
+	if action == 1 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsimn") then
+		if metadmin.questions[id].enabled == 1 then action = "отключен" else action = "включен" end
+		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно "..action)
+		metadmin.SaveQuestion(id,nil,metadmin.questions[id].enabled == 1 and 0 or 1)
 		refreshquestions()
-	elseif action == 2 and questionstab[id] and ULib.ucl.query(ply,"ma.questionsremove") then
-		ply:ChatPrint("Шаблон "..questionstab[id].name.." успешно удален")
+	elseif action == 2 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsremove") then
+		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно удален")
 		metadmin.RemoveQuestion(id)
 		refreshquestions()
-	elseif action == 3 and questionstab[id] and ULib.ucl.query(ply,"ma.questionsedit") then
+	elseif action == 3 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
 		local tab = net.ReadTable()
 		metadmin.SaveQuestion(id,util.TableToJSON(tab))
-		ply:ChatPrint("Шаблон "..questionstab[id].name.." успешно изменен")
+		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно изменен")
 		refreshquestions()
 	elseif action == 4 and ULib.ucl.query(ply,"ma.questionscreate") then
 		local name = net.ReadString()
@@ -371,17 +419,17 @@ net.Receive( "metadmin.qaction", function(len, ply)
 	else return end
 end)
 
-function metadmin.questions(call,sid,id)
+function metadmin.sendquestions(call,sid,id)
 	local target = player.GetBySteamID(sid)
 	if target then
 		if target:GetNWBool("anstoques",false) then call:ChatPrint("Игрок еще не ответил на предыдущий тест!") return end
-		if not questionstab[id] then return call:ChatPrint("Такого шаблона нет!") end
-		if questionstab[id].enabled == 0 then return call:ChatPrint("Этот шаблон отключен!") end
+		if not metadmin.questions[id] then return call:ChatPrint("Такого шаблона нет!") end
+		if metadmin.questions[id].enabled == 0 then return call:ChatPrint("Этот шаблон отключен!") end
 		net.Start("metadmin.questions")
-			net.WriteTable({questions = questionstab[id].questions,name = questionstab[id].name,id = id})
+			net.WriteTable({questions = metadmin.questions[id].questions,name = metadmin.questions[id].name,id = id})
 		net.Send(target)
 		target:SetNWBool("anstoques",true)
-		call:ChatPrint("Вопросы("..questionstab[id].name..") отправленны игроку "..target:Nick())
+		call:ChatPrint("Вопросы("..metadmin.questions[id].name..") отправленны игроку "..target:Nick())
 	end
 end
 function metadmin.view_answers(call,sid,id)
@@ -396,7 +444,7 @@ function metadmin.view_answers(call,sid,id)
 		if not tab then return end
 		tab.nick = GetNick(sid,"UNKNOWN")
 		tab.sid = sid
-		tab.questions = questionstab[tonumber(tab.answerstab.questions)].questions
+		tab.questions = metadmin.questions[tonumber(tab.answerstab.questions)].questions
 		net.Start("metadmin.viewanswers")
 			net.WriteTable(tab)
 		net.Send(call)
@@ -407,7 +455,7 @@ end
 net.Receive( "metadmin.answers", function(len, ply)
 	if not ply:GetNWBool("anstoques",false) then return end
 	local tab = net.ReadTable()
-	if questionstab[tab.id].enabled == 0 then return end
+	if metadmin.questions[tab.id].enabled == 0 then return end
 	net.Start("metadmin.notify")
 		net.WriteString("Игрок "..ply:Nick().." ответил на вопросы теста. Его результат записан и вскоре будет проверен.")
 	net.Broadcast()
