@@ -81,6 +81,9 @@ function metadmin.CreateData(sid)
 	metadmin.players[sid].status.nom = 1
 	metadmin.players[sid].status.admin = ""
 	metadmin.players[sid].status.date = os.time()
+	metadmin.players[sid].violations = {}
+	metadmin.players[sid].exam = {}
+	metadmin.players[sid].exam_answers = {}
 end
 
 function metadmin.GetQuestions(cb)
