@@ -352,7 +352,7 @@ function metadmin.promotion(call,sid,note)
 		if not ULib.ucl.query(call,"ma.prom"..newgroup) then return end
 		local target = player.GetBySteamID(sid)
 		if target then
-			metadmin.setulxrank(target,group)
+			metadmin.setulxrank(target,newgroup)
 		end
 		local nick = GetNick(sid,sid)
 		net.Start("metadmin.notify")
