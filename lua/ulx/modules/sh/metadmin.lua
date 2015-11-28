@@ -12,12 +12,12 @@ timer.Simple(1,function()
 	local st = ulx.command(metadmin.category, "ulx setrank", metadmin.setrank, "!setrank")
 	st:defaultAccess(ULib.ACCESS_SUPERADMIN)
 	st:addParam{type=ULib.cmds.PlayerArg}
-	st:addParam{ type=ULib.cmds.StringArg, hint="RANK",completes=metadmin.ranks1, ULib.cmds.restrictToCompletes}
+	st:addParam{ type=ULib.cmds.StringArg, hint="RANK",completes=table.GetKeys(metadmin.ranks), ULib.cmds.restrictToCompletes}
 	st:help("Установка ранга.")
 	
 	local stid = ulx.command(metadmin.category, "ulx setrankid", metadmin.setrank, "!setrankid")
 	stid:defaultAccess(ULib.ACCESS_SUPERADMIN)
 	stid:addParam{ type=ULib.cmds.StringArg, hint="PLAYER"}
-	stid:addParam{ type=ULib.cmds.StringArg, hint="RANK",completes=metadmin.ranks1, ULib.cmds.restrictToCompletes}
+	stid:addParam{ type=ULib.cmds.StringArg, hint="RANK",completes=table.GetKeys(metadmin.ranks), ULib.cmds.restrictToCompletes}
 	stid:help("Установка ранга.")
 end)
