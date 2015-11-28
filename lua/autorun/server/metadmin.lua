@@ -241,7 +241,7 @@ net.Receive("metadmin.settings", function(len, ply)
 		metadmin[k] = v
 	end
 	local tab = {}
-	for k,v in pairs(metadmin.defvalues) do
+	for k,v in pairs(metadmin.senduser) do
 		tab[v] = metadmin[v]
 	end
 	for k,v in pairs(metadmin.sendadm) do
