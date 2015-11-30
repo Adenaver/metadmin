@@ -208,7 +208,7 @@ local function GetNick(sid,def)
 	end
 	return nick
 end
-
+local status = {[0]="На проверке","Сдал","Не сдал"}
 net.Receive( "metadmin.action", function(len, ply)
 	if not ULib.ucl.query(ply,"ma.pl") then return end
 	local sid = net.ReadString()
@@ -223,11 +223,23 @@ net.Receive( "metadmin.action", function(len, ply)
 	elseif action == 4 and ULib.ucl.query(ply,"ma.viewresults") then
 		metadmin.view_answers(ply,sid,tonumber(str))
 	elseif action == 5 and ULib.ucl.query(ply,"ma.setstattest") then
-		metadmin.SetStatusTest(str,net.ReadInt(4))
+		local stat = net.ReadInt(4)
+		metadmin.SetStatusTest(str,stat)
 		metadmin.GetTests(sid, function(data)
 			metadmin.players[sid].exam_answers = data
 		end)
 		ply:ChatPrint("Статус изменен")
+		local target = player.GetBySteamID(sid)
+		if target then
+			local tab = metadmin.players[sid].exam_answers
+			for k,v in pairs(tab) do
+				if tonumber(str) == tonumber(v.id) then
+					net.Start("metadmin.notify")
+						net.WriteString(ply:Nick().." установил статус \""..status[stat].."\" на Ваш тест ("..metadmin.questions[tonumber(v.questions)].name..")")
+					net.Send(target)
+				end
+			end
+		end
 	elseif action == 7 and ULib.ucl.query(ply,"ma.settalon") then
 		metadmin.settalon(ply,sid,1)
 	elseif action == 8 and ULib.ucl.query(ply,"ma.settalon") then
@@ -348,9 +360,11 @@ function metadmin.profile(call,sid)
 			tab.status = metadmin.players[sid].status
 			tab.status.admin = GetNick(tab.status.admin,tab.status.admin)
 		end
-		if ULib.ucl.query(call,"ma.viewresults") then
+		if target == call or ULib.ucl.query(call,"ma.viewresults") then
 			tab.exam_answers = metadmin.players[sid].exam_answers
 			for k,v in pairs(tab.exam_answers) do
+				v.questions = tonumber(v.questions)
+				v.name = (metadmin.questions[v.questions] and metadmin.questions[v.questions].name) or "Шаблон удален"
 				v.admin = GetNick(v.admin,v.admin)
 			end
 		end
