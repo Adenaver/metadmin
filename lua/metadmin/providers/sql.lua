@@ -8,7 +8,8 @@ local function Start()
 		`date` text NOT NULL,
 		`questions` text NOT NULL,
 		`status` int(11) NOT NULL DEFAULT '0',
-		`answers` text NOT NULL
+		`answers` text NOT NULL,
+		`admin` text NOT NULL
 		)]])
 	end
 	if not sql.TableExists("examinfo") then
@@ -51,6 +52,10 @@ local function Start()
 	end
 end
 Start()
+
+function metadmin.FIX()
+	sql.Query("ALTER TABLE answers ADD COLUMN admin text NOT NULL DEFAULT ''")
+end
 function metadmin.GetData(sid,cb)
     local result = sql.Query("SELECT * FROM players WHERE SID='"..sid.."'")
 	cb(result)
@@ -105,6 +110,10 @@ function metadmin.SaveQuestion(id,questions,enabled)
    sql.Query("UPDATE `questions` SET "..table..enbl.." WHERE `id`="..tonumber(id))
 end
 
+function metadmin.SaveQuestionName(id,name)
+   sql.Query("UPDATE `questions` SET `name` = '"..name.."' WHERE `id`="..tonumber(id))
+end
+
 function metadmin.RemoveQuestion(id)
   sql.Query("DELETE FROM `questions` WHERE `id`='"..id.."'")
 end
@@ -123,8 +132,8 @@ function metadmin.GetTests(sid,cb)
 	cb(result)
 end
 
-function metadmin.AddTest(sid,ques,ans)
-	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..")")
+function metadmin.AddTest(sid,ques,ans,adminsid)
+	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..",'"..adminsid.."')")
 end
 
 function metadmin.SetStatusTest(id,status)

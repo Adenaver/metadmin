@@ -225,28 +225,28 @@ function metadmin.serversettings()
 	server:SetSize(105,20)
 	server:SetText("Имя сервера")
 	server.DoClick = function()
-			local frame = vgui.Create("DFrame")
-			frame:SetSize(150,75)
-			frame:SetTitle("Название сервера")
-			frame:SetDraggable(true)
-			frame:Center()
-			frame:MakePopup()
-			frame.btnMaxim:SetVisible(false)
-			frame.btnMinim:SetVisible(false)
-			local text = vgui.Create("DTextEntry",frame)
-			text:SetPos(5,30)
-			text:SetSize(140,20)
-			text:SetText(metadmin.server)
-			local send = vgui.Create("DButton",frame)
-			send:SetPos(5,50)
-			send:SetText("Сохранить")
-			send:SetSize(140,20)
-			send.DoClick = function()
-				net.Start("metadmin.settings")
-					net.WriteTable({server= text:GetValue()})
-				net.SendToServer()
-				frame:Close()
-			end
+		local frame = vgui.Create("DFrame")
+		frame:SetSize(150,75)
+		frame:SetTitle("Название сервера")
+		frame:SetDraggable(true)
+		frame:Center()
+		frame:MakePopup()
+		frame.btnMaxim:SetVisible(false)
+		frame.btnMinim:SetVisible(false)
+		local text = vgui.Create("DTextEntry",frame)
+		text:SetPos(5,30)
+		text:SetSize(140,20)
+		text:SetText(metadmin.server)
+		local send = vgui.Create("DButton",frame)
+		send:SetPos(5,50)
+		send:SetText("Сохранить")
+		send:SetSize(140,20)
+		send.DoClick = function()
+			net.Start("metadmin.settings")
+				net.WriteTable({server= text:GetValue()})
+			net.SendToServer()
+			frame:Close()
+		end
 	end
 	
 	local disp = vgui.Create("DComboBox",Frame)
@@ -1086,39 +1086,49 @@ function metadmin.profile(tab)
 		end
 	end
 	local nick = vgui.Create("DLabel",DPanel)
-	nick:SetSize(574,15)
 	nick:SetPos(75,5)
 	nick:SetText("Ник: "..tab.Nick)
+	nick:SizeToContents()
 	
 	local steamid = vgui.Create("DLabel",DPanel)
-	steamid:SetSize(50,15)
 	steamid:SetPos(75,20)
 	steamid:SetText("STEAMID:")
+	steamid:SizeToContents()
 	
 	local steamid2 = vgui.Create("DLabel",DPanel)
-	steamid2:SetSize(110,15)
 	steamid2:SetPos(125,20)
 	steamid2:SetText(tab.SID)
---[[	steamid2:SetMouseInputEnabled(true)
+	steamid2:SetTextColor(Color(0, 0, 255))
+	steamid2:SetToolTip("Копировать")
+	steamid2:SizeToContents()
+	steamid2:SetMouseInputEnabled(true)
+	
 	function steamid2:OnCursorEntered()
 		self:SetCursor("hand")
 	end
 	function steamid2:OnCursorExited()
 		self:SetCursor("arrow")
 	end
-	function steamid2:OnMouseReleased(code)
+	function steamid2:OnMousePressed(code)
 		if (code == MOUSE_LEFT) then
+			self.wasPressed = CurTime()
+		end
+	end
+	function steamid2:OnMouseReleased()
+		if (self.wasPressed and CurTime()-self.wasPressed <= 0.16) then
 			SetClipboardText(tab.SID)
 		end
-	end]]
+		self.wasPressed = nil
+	end
+	
 	local rank = vgui.Create("DLabel",DPanel)
-	rank:SetSize(574,15)
 	rank:SetPos(75,35)
 	rank:SetText("Ранг: "..metadmin.ranks[tab.rank])
+	rank:SizeToContents()
 	local nvoiol = vgui.Create("DLabel",DPanel)
-	nvoiol:SetSize(574,15)
 	nvoiol:SetPos(75,50)
 	nvoiol:SetText("Нарушений: "..tab.nvio)
+	nvoiol:SizeToContents()
 	local Avatar = vgui.Create("AvatarImage",DPanel)
 	Avatar:SetSize(64,64)
 	Avatar:SetPos(5,7)
@@ -1312,7 +1322,7 @@ function metadmin.profile(tab)
 			info:SetSize(574,15)
 			info:SetPos(25,5)
 			local text = (metadmin.questions[tonumber(v.questions)] and metadmin.questions[tonumber(v.questions)].name) or "Шаблон удален"
-			info:SetText("| "..text.." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date))
+			info:SetText("| "..text.." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date)..(v.admin != "" and " | Выдал: "..v.admin or ""))
 			num = num + 1
 		end
 		tabs:AddSheet("Результаты тестов (Для админов)", answers,"icon16/page_edit.png")
@@ -1357,7 +1367,7 @@ function metadmin.questionslist()
 	questionlist:SetSize(180,220)
 	questionlist:SetMultiSelect(false)
 	local menu
-	questionlist.OnClickLine = function( panel, line )
+	questionlist.OnClickLine = function(panel,line)
 		if IsValid(menu) then menu:Remove() end
 		line:SetSelected(true)
 		menu = DermaMenu()
@@ -1371,14 +1381,45 @@ function metadmin.questionslist()
 		end)
 		row:SetIcon("icon16/table.png")
 		if Access("ma.questionsedit") then
-			local row = menu:AddOption("Редактировать", function()
-				metadmin.questions2(line.id,"edit")
-				Frame:Close()
-			end)
+			local sub, row = menu:AddSubMenu("Редактировать")
 			row:SetIcon("icon16/table_edit.png")
+				local row = sub:AddOption("Имя", function()
+					local frame = vgui.Create("DFrame")
+					frame:SetSize(150,75)
+					frame:SetTitle("Название сервера")
+					frame:SetDraggable(true)
+					frame:Center()
+					frame:MakePopup()
+					frame.btnMaxim:SetVisible(false)
+					frame.btnMinim:SetVisible(false)
+					local text = vgui.Create("DTextEntry",frame)
+					text:SetPos(5,30)
+					text:SetSize(140,20)
+					text:SetText(line:GetValue(1))
+					local send = vgui.Create("DButton",frame)
+					send:SetPos(5,50)
+					send:SetText("Сохранить")
+					send:SetSize(140,20)
+					local id = line.id
+					send.DoClick = function()
+						net.Start("metadmin.qaction")
+							net.WriteInt(5,5)
+							net.WriteInt(id,32)
+							net.WriteString(text:GetValue())
+						net.SendToServer()
+						frame:Close()
+					end
+					Frame:Close()
+				end)
+				row:SetTextInset(10,0)
+				local row = sub:AddOption("Шаблон", function()
+					metadmin.questions2(line.id,"edit")
+					Frame:Close()
+				end)
+				row:SetTextInset(10,0)
 		end
 		if Access("ma.questionsimn") then
-			local row = menu:AddOption(line:GetValue(2)==0 and"Включить"or"Отключить", function()
+			local row = menu:AddOption(line.enabled==0 and"Включить"or"Отключить", function()
 				net.Start("metadmin.qaction")
 					net.WriteInt(1,5)
 					net.WriteInt(line.id,32)
@@ -1421,11 +1462,15 @@ function metadmin.questionslist()
 		end
 		menu:Open()
 	end
-	questionlist:AddColumn("Название"):SetFixedWidth(130)
-	questionlist:AddColumn("Вкл."):SetFixedWidth(50)
+	questionlist:AddColumn("Название")
 	for k,v in pairs(metadmin.questions) do
-		local line = questionlist:AddLine(v.name,v.enabled)
+		local line = questionlist:AddLine(v.name)
 		line.id = k
+		line.enabled = v.enabled
+		line.Paint = function(self,w,h)
+			surface.SetDrawColor(v.enabled==1 and Color(0,255,0,200) or Color(160,160,160,200))
+			surface.DrawRect(0,0,w,h)
+		end
 	end
 end
 
@@ -1456,8 +1501,7 @@ end
 
 function metadmin.question(tab)
 	local answer = {}
-	local id = tab.id
-	local maxn = #tab.questions
+	local maxn = #tab
 	local Frame = vgui.Create("DFrame")
 	Frame:SetSize(800,math.min(600,80+40*maxn))
 	Frame:SetTitle("Вопросы ("..maxn..")")
@@ -1473,7 +1517,7 @@ function metadmin.question(tab)
 	DPanel:SetSize(790, 20+40*maxn)
 	DLabel:SetDark(1)
 	local num = 0
-	for k, v in pairs(tab.questions) do
+	for k, v in pairs(tab) do
 		local question = vgui.Create("DLabel",DPanel)
 		question:SetSize(760,20)
 		question:SetPos(5,5+num*40)
@@ -1492,8 +1536,8 @@ function metadmin.question(tab)
 		for k, v in pairs(answer) do
 			answers[k] = answer[k]:GetValue()
 		end
-		net.Start( "metadmin.answers" )
-			net.WriteTable({ans = answers, id = id})
+		net.Start("metadmin.answers")
+			net.WriteTable(answers)
 		net.SendToServer()
 		Frame:Close()
 	end
@@ -1581,11 +1625,22 @@ function metadmin.questions2(id,type,ply)
 	send:SetText( type == "edit" and "Сохранить" or ply and "Отправить игроку "..ply.nick or "Обратно в меню" )
 	send:SetSize(790,20)
 	if type == "edit" then
-		local add = vgui.Create("DButton",Frame)
-		add:SetPos(600,2.5)
-		add:SetText("Добавить")
-		add:SetSize(80, 20)
-		add.DoClick = function()
+		local DPanel2 = vgui.Create("DPanel",Frame)
+		DPanel2:SetPos(718,2)
+		DPanel2:SetSize(37,18)
+		local add = vgui.Create("DImage",DPanel2)
+		add:SetPos(1,1)
+		add:SetSize(16,16)
+		add:SetImage("icon16/add.png")
+		add:SetToolTip("Добавить")
+		add:SetMouseInputEnabled(true)
+		function add:OnCursorEntered()
+			self:SetCursor("hand")
+		end
+		function add:OnCursorExited()
+			self:SetCursor("arrow")
+		end
+		function add:OnMouseReleased(code)
 			local k = #questions2 + 1
 			Frame:SetSize( 800, math.min(600,80+20*k) )
 			DScrollPanel:SetSize( 790, math.min(540,60+20*k) )
@@ -1596,18 +1651,29 @@ function metadmin.questions2(id,type,ply)
 			questions2[k]:SetPos( 5, 5 + (k-1)*20 )
 			questions2[k]:SetText("Новое поле")
 		end
-		local rem = vgui.Create("DButton",Frame)
-		rem:SetPos(680,2.5)
-		rem:SetText("Удалить")
-		rem:SetSize(80,20)
-		rem.DoClick = function()
+		
+		local rem = vgui.Create("DImage",DPanel2)
+		rem:SetPos(20,1)
+		rem:SetSize(16,16)
+		rem:SetImage("icon16/delete.png")
+		rem:SetToolTip("Удалить")
+		rem:SetMouseInputEnabled(true)
+		function rem:OnCursorEntered()
+			self:SetCursor("hand")
+		end
+		function rem:OnCursorExited()
+			self:SetCursor("arrow")
+		end
+		function rem:OnMouseReleased(code)
 			local k = #questions2 -1
-			Frame:SetSize( 800, math.min(600,80+20*k) )
-			DScrollPanel:SetSize( 790, math.min(540,60+20*k) )
-			DPanel:SetSize( 790, 20+20*k )
-			send:SetPos( 5, math.min(575,55+20*k))
-			questions2[k+1]:Remove()
-			questions2[k+1] = nil
+			if IsValid(questions2[k+1]) then
+				Frame:SetSize( 800, math.min(600,80+20*k) )
+				DScrollPanel:SetSize( 790, math.min(540,60+20*k) )
+				DPanel:SetSize( 790, 20+20*k )
+				send:SetPos( 5, math.min(575,55+20*k))
+				questions2[k+1]:Remove()
+				questions2[k+1] = nil
+			end
 		end
 	end
 	send.DoClick = function()

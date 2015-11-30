@@ -149,6 +149,24 @@ function metadmin.SaveQuestion(id,questions,enabled)
     q:start()
 end
 
+function metadmin.SaveQuestionName(id,name)
+   local q = db:query("UPDATE `questions` SET `name` = '"..name.."' WHERE `id`='"..id.."'")
+  q.onError = function(err, sql)
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            db:connect()
+            db:wait()
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            ErrorNoHalt("Переподключение не удалось.")
+            return
+            end
+        end
+        MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+        q:start()
+    end
+     
+    q:start()
+end
+
 function metadmin.RemoveQuestion(id)
   local q = db:query("DELETE FROM `questions` WHERE `id`='"..id.."'")
   q.onError = function(err, sql)
@@ -206,8 +224,8 @@ function metadmin.GetTests(sid,cb)
 	q:start()
 end
 
-function metadmin.AddTest(sid,ques,ans)
-    local q = db:query("INSERT INTO `answers` (`sid`,`date`,`questions`,`answers`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."')")
+function metadmin.AddTest(sid,ques,ans,adminsid)
+    local q = db:query("INSERT INTO `answers` (`sid`,`date`,`questions`,`answers`,`answers`) VALUES ('"..sid.."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."','"..sid.."')")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()

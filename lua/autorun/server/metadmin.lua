@@ -350,6 +350,9 @@ function metadmin.profile(call,sid)
 		end
 		if ULib.ucl.query(call,"ma.viewresults") then
 			tab.exam_answers = metadmin.players[sid].exam_answers
+			for k,v in pairs(tab.exam_answers) do
+				v.admin = GetNick(v.admin,v.admin)
+			end
 		end
 		tab.rank = metadmin.players[sid].rank
 		tab.SID = sid
@@ -485,6 +488,10 @@ net.Receive( "metadmin.qaction", function(len, ply)
 		metadmin.AddQuestion(name)
 		ply:ChatPrint("Шаблон "..name.." успешно добавлен")
 		refreshquestions()
+	elseif action == 5 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
+		metadmin.SaveQuestionName(id,net.ReadString())
+		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно изменен")
+		refreshquestions()
 	else return end
 end)
 
@@ -496,11 +503,15 @@ function metadmin.sendquestions(call,sid,id)
 		if not metadmin.questions[id] then return call:ChatPrint("Такого шаблона нет!") end
 		if metadmin.questions[id].enabled == 0 then return call:ChatPrint("Этот шаблон отключен!") end
 		net.Start("metadmin.questions")
-			net.WriteTable({questions = metadmin.questions[id].questions,name = metadmin.questions[id].name,id = id})
+			net.WriteTable(metadmin.questions[id].questions)
 		net.Send(target)
 		target.anstoques = {}
 		target.anstoques.nick = call:Nick()
-		target.anstoques.sid = call:SteamID()
+		target.anstoques.adminsid = call:SteamID()
+		target.anstoques.idquestions = id
+		net.Start("metadmin.notify")
+			net.WriteString(call:Nick().." отправил тест ("..metadmin.questions[id].name..") игроку "..target:Nick())
+		net.Broadcast()
 		call:ChatPrint("Вопросы("..metadmin.questions[id].name..") отправленны игроку "..target:Nick())
 	end
 end
@@ -524,18 +535,18 @@ function metadmin.view_answers(call,sid,id)
 		metadmin.GetDataSID(sid,function() metadmin.view_answers(call,sid,id) end)
 	end
 end
-net.Receive( "metadmin.answers", function(len, ply)
+net.Receive("metadmin.answers", function(len, ply)
 	if not ply.anstoques then return end
-	local tab = net.ReadTable()
-	if metadmin.questions[tab.id].enabled == 0 then return end
+	local ans = net.ReadTable()
+	if metadmin.questions[ply.anstoques.idquestions].enabled == 0 then return end
 	net.Start("metadmin.notify")
 		net.WriteString("Игрок "..ply:Nick().." ответил на вопросы теста. Его результат записан и вскоре будет проверен.")
 	net.Broadcast()
-	ply.anstoques = false
-	metadmin.AddTest(ply:SteamID(),tab.id,util.TableToJSON(tab.ans))
+	metadmin.AddTest(ply:SteamID(),ply.anstoques.idquestions,util.TableToJSON(ans),ply.anstoques.adminsid)
 	metadmin.GetTests(ply:SteamID(), function(data)
 		metadmin.players[ply:SteamID()].exam_answers = data
 	end)
+	ply.anstoques = false
 end)
 
 hook.Add("PlayerSay", "XER", function(ply,text)
