@@ -1704,4 +1704,3 @@ function metadmin.questions2(id,type,ply)
 		end
 	end
 end
-end
