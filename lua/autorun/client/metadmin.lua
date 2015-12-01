@@ -1170,7 +1170,7 @@ function metadmin.profile(tab)
 		local num = 0
 		for k,v in pairs(tab.violations) do
 			local DPanel = vgui.Create("DPanel",DScrollPanel)
-			DPanel:SetPos(0,120*num)
+			DPanel:SetPos(0,80*num)
 			DPanel:SetSize(584,75)
 			DLabel:SetDark(1)
 			if Access("ma.violationremove") then
