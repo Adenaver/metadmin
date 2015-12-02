@@ -261,7 +261,9 @@ net.Receive("metadmin.settings", function(len, ply)
 	end
 	
 	file.Write("metadmin/settings.txt",util.TableToJSON(tab))
-	metadmin.SendSettings(ply)
+	for k, v in pairs(player.GetAll()) do
+		metadmin.SendSettings(v)
+	end
 end)
 
 net.Receive( "metadmin.order", function(len, ply)
