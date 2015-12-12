@@ -10,7 +10,7 @@ if not file.Exists(path, "LUA") then
 end
 include(path)
 metadmin.senduser = {"ranks","prom","dem","plombs","pogona"}
-metadmin.sendadm = {"server","groupwrite","disp","showserver"}
+metadmin.sendadm = {"server","groupwrite","disp","showserver","voice"}
 
 metadmin.defserver = "SERVER"
 metadmin.defgroupwrite = false 
@@ -261,9 +261,7 @@ net.Receive("metadmin.settings", function(len, ply)
 	end
 	
 	file.Write("metadmin/settings.txt",util.TableToJSON(tab))
-	for k, v in pairs(player.GetAll()) do
-		metadmin.SendSettings(v)
-	end
+	metadmin.SendSettings(ply)
 end)
 
 net.Receive( "metadmin.order", function(len, ply)
@@ -514,7 +512,7 @@ end)
 function metadmin.sendquestions(call,sid,id)
 	local target = player.GetBySteamID(sid)
 	if target then
-		if target == call then call:ChatPrint("Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!")  return end
+		if target == call then call:ChatPrint("Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
 		if target.anstoques then call:ChatPrint("Игрок еще не ответил на предыдущий тест, который выдал "..target.anstoques.nick) return end
 		if not metadmin.questions[id] then return call:ChatPrint("Такого шаблона нет!") end
 		if metadmin.questions[id].enabled == 0 then return call:ChatPrint("Этот шаблон отключен!") end
@@ -614,3 +612,57 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 		end
 	end)
 end
+
+hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
+	if metadmin.voice then
+		if listener:IsSuperAdmin() then return true end
+		if metadmin.players[talker:SteamID()].rank == metadmin.disp then
+			return true
+		end
+		if metadmin.players[listener:SteamID()].rank == metadmin.disp then
+			return true
+		end
+		return false
+	end
+end)
+
+
+--[[
+local function IsInRoom(listener, talker) -- IsInRoom function to see if the player is in the same room.
+    local tracedata = {}
+    tracedata.start = talker:GetShootPos()
+    tracedata.endpos = listener:GetShootPos()
+    local trace = util.TraceLine(tracedata)
+
+    return not trace.HitWorld
+end
+-- proxy function to take load from PlayerCanHearPlayersVoice, which is called a quadratic amount of times per tick,
+-- causing a lagfest when there are many players
+local function calcPlyCanHearPlayerVoice(listener)
+    if not IsValid(listener) then return end
+    listener.DrpCanHear = listener.DrpCanHear or {}
+    for _, talker in pairs(player.GetAll()) do
+        listener.DrpCanHear[talker] = not true or -- Voiceradius is off, everyone can hear everyone
+            (listener:GetShootPos():DistToSqr(talker:GetShootPos()) < 302500 and -- voiceradius is on and the two are within hearing distance
+                (not true or IsInRoom(listener, talker))) -- Dynamic voice is on and players are in the same room
+    end
+end
+hook.Add("PlayerInitialSpawn", "DarkRPCanHearVoice", function(ply)
+    timer.Create(ply:UserID() .. "DarkRPCanHearPlayersVoice", 0.5, 0, fn.Curry(calcPlyCanHearPlayerVoice, 2)(ply))
+end)
+hook.Add("PlayerDisconnected", "DarkRPCanHearVoice", function(ply)
+    if not ply.DrpCanHear then return end
+    for k,v in pairs(player.GetAll()) do
+        if not v.DrpCanHear then continue end
+        v.DrpCanHear[ply] = nil
+    end
+    timer.Remove(ply:UserID() .. "DarkRPCanHearPlayersVoice")
+end)
+
+function GM:PlayerCanHearPlayersVoice(listener, talker)
+    if not talker:Alive() then return false end
+
+    local canHear = listener.DrpCanHear and listener.DrpCanHear[talker]
+    return canHear, true
+end
+]]

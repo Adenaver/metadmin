@@ -168,7 +168,7 @@ end
 function metadmin.serversettings()
 	if not Access("ma.settings") then return end
 	local Frame = vgui.Create("DFrame")
-	Frame:SetSize(250,170)
+	Frame:SetSize(250,200)
 	Frame:SetTitle("Настройки сервера")
 	Frame:SetDraggable(true)
 	Frame.btnMaxim:SetVisible(false)
@@ -177,7 +177,7 @@ function metadmin.serversettings()
 	Frame:Center()
 	local DPanel = vgui.Create("DPanel",Frame)
 	DPanel:SetPos(5,30)
-	DPanel:SetSize(240,135)
+	DPanel:SetSize(240,165)
 	DLabel:SetDark(1)
 	
 	local synch = vgui.Create("DCheckBoxLabel",Frame)
@@ -220,8 +220,20 @@ function metadmin.serversettings()
 	end
 	showserver:SizeToContents()
 	
+	local voice = vgui.Create("DCheckBoxLabel",Frame)
+	voice:SetPos(10,85)
+	voice:SetText("Голосовой чат")
+	voice:SetChecked(metadmin.showserver)
+	voice:SetToolTip("Диспетчер слышит всех, остальные слышат только диспетчера")
+	voice.OnChange = function(self, value)
+		net.Start("metadmin.settings")
+			net.WriteTable({voice=value})
+		net.SendToServer()
+	end
+	voice:SizeToContents()
+	
 	local server = vgui.Create("DButton",Frame)
-	server:SetPos(10,85)
+	server:SetPos(10,115)
 	server:SetSize(105,20)
 	server:SetText("Имя сервера")
 	server.DoClick = function()
@@ -250,7 +262,7 @@ function metadmin.serversettings()
 	end
 	
 	local disp = vgui.Create("DComboBox",Frame)
-	disp:SetPos(135,85)
+	disp:SetPos(135,115)
 	disp:SetSize(105,20)
 	disp:SetToolTip("Группа диспетчера")
 	disp:SetText(metadmin.ranks[metadmin.disp] or metadmin.disp)
@@ -264,7 +276,7 @@ function metadmin.serversettings()
 	end
 	
 	local ranks = vgui.Create("DButton",Frame)
-	ranks:SetPos(10,115)
+	ranks:SetPos(10,145)
 	ranks:SetText("Ранги")
 	ranks:SetSize(70,20)
 	ranks.DoClick = function()
@@ -365,7 +377,7 @@ function metadmin.serversettings()
 	end
 	
 	local prom = vgui.Create("DButton",Frame)
-	prom:SetPos(90,115)
+	prom:SetPos(90,145)
 	prom:SetText("Повышения")
 	prom:SetSize(70,20)
 	prom.DoClick = function()
@@ -466,7 +478,7 @@ function metadmin.serversettings()
 	end
 	
 	local dem = vgui.Create("DButton",Frame)
-	dem:SetPos(170,115)
+	dem:SetPos(170,145)
 	dem:SetText("Понижения")
 	dem:SetSize(70,20)
 	dem.DoClick = function()
@@ -567,7 +579,7 @@ function metadmin.serversettings()
 	end
 	
 	local plombs = vgui.Create("DButton",Frame)
-	plombs:SetPos(10,140)
+	plombs:SetPos(10,170)
 	plombs:SetText("Пломбы")
 	plombs:SetSize(110,20)
 	plombs.DoClick = function()
@@ -667,7 +679,7 @@ function metadmin.serversettings()
 		end
 	end
 	local pogona = vgui.Create("DButton",Frame)
-	pogona:SetPos(130,140)
+	pogona:SetPos(130,170)
 	pogona:SetText("Погоны")
 	pogona:SetSize(110,20)
 	pogona.DoClick = function()
