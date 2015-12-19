@@ -1,11 +1,20 @@
 metadmin = metadmin or {}
-metadmin.category = "MetrostroiAdmin" -- Категория в ulx
+metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
 metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX"
+metadmin.version = "19/12/2015"
 
-local path = "metadmin/providers/" .. metadmin.provider .. ".lua"
+if metadmin.provider == "mysql" then
+	metadmin.mysql.host = "localhost" -- Хост
+	metadmin.mysql.user = "root" -- Пользователь
+	metadmin.mysql.pass = "" -- Пароль
+	metadmin.mysql.database = "" -- Название базы данных
+	metadmin.mysql.port = 3306 -- Порт
+end
+
+local path = "metadmin/providers/"..metadmin.provider..".lua"
 if not file.Exists(path, "LUA") then
-	error("Не найдено. " .. path)
+	error("Не найдено. "..path)
 	return
 end
 include(path)
@@ -47,10 +56,19 @@ metadmin.defplombs = {
 	["A5"] = "A5"
 }
 metadmin.defpogona = {}
-util.AddNetworkString("metadmin.settings")
 local function start()
 	if not file.Exists("metadmin","DATA") then
 		file.CreateDir("metadmin")
+	end
+	if not file.Exists("metadmin/version.txt","DATA") then
+		file.Write("metadmin/version.txt",metadmin.version)
+		metadmin.FIX()
+	else
+		local version = file.Read("metadmin/version.txt","DATA")
+		if version != metadmin.version then
+			file.Write("metadmin/version.txt",metadmin.version)
+			metadmin.FIX()
+		end
 	end
 	if not file.Exists("metadmin/settings.txt","DATA") then
 		local tab = {}
@@ -80,10 +98,10 @@ local function start()
 			end
 		end
 	end
+	http.Fetch("http://metrostroi.net/metadmin/version",function(body,len,headers,code) if metadmin.version != body then metadmin.notifver = body end end)
 end
 start()
- 
-metadmin.players = metadmin.players or {}
+
 util.AddNetworkString("metadmin.profile")
 util.AddNetworkString("metadmin.violations")
 util.AddNetworkString("metadmin.questions")
@@ -94,13 +112,14 @@ util.AddNetworkString("metadmin.qaction")
 util.AddNetworkString("metadmin.questionstab")
 util.AddNetworkString("metadmin.notify")
 util.AddNetworkString("metadmin.order")
+util.AddNetworkString("metadmin.settings")
 
 for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
 end
 
 metadmin.questions = metadmin.questions or {}
-hook.Add( "InitPostEntity", "init", function()
+hook.Add( "InitPostEntity", "MetAdminInit", function()
 	ULib.ucl.registerAccess("ma.pl", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню с игроками.",metadmin.category)
 	ULib.ucl.registerAccess("ma.questionsmenu", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню вопросов.",metadmin.category)
 	for k, v in pairs(metadmin.prom) do
@@ -121,6 +140,7 @@ hook.Add( "InitPostEntity", "init", function()
 	ULib.ucl.registerAccess("ma.settalon", ULib.ACCESS_SUPERADMIN, "Установка талона.",metadmin.category)
 	ULib.ucl.registerAccess("ma.viewtalon", ULib.ACCESS_SUPERADMIN, "Просмотр талона.",metadmin.category)
 	ULib.ucl.registerAccess("ma.setstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.",metadmin.category)
+	ULib.ucl.registerAccess("ma.forcesetstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.(Без проверки)",metadmin.category)
 	ULib.ucl.registerAccess("ma.order", ULib.ACCESS_SUPERADMIN, "Доступ к приказам.",metadmin.category)
 	ULib.ucl.registerAccess("ma.settings", ULib.ACCESS_SUPERADMIN, "Доступ к настройкам.",metadmin.category)
 	timer.Simple(2.5, function()
@@ -137,15 +157,30 @@ hook.Add( "InitPostEntity", "init", function()
 		)
 	end)
 end)
-hook.Add('MetrostroiPlombBroken', 'plomb', function(train,but,drv)
+function metadmin.Notify(target,...)
+	net.Start("metadmin.notify")
+		net.WriteTable({...})
+	if not target then
+		net.Broadcast()
+	else
+		net.Send(target)
+	end
+end
+
+function metadmin.Log(str)
+	ServerLog(str)
+	file.Append("metadmin/log.txt","["..os.date( "%X - %d/%m/%Y",os.time()).."] "..str.."\r\n")
+end
+
+hook.Add('MetrostroiPlombBroken', 'MetAdmin', function(train,but,drv)
 	local ply = train:GetDriver()
 	if ply.plombs[but] then
 		ply.plombs[but] = nil
 	else
 		but = metadmin.plombs and metadmin.plombs[but] or but
-		net.Start("metadmin.notify")
-			net.WriteString(ply:Nick().." cорвал пломбу с "..but.." без разрешения диспетчера.")
-		net.Broadcast()
+		local str = ply:Nick().." cорвал пломбу с "..but.." без разрешения диспетчера."
+		metadmin.Notify(false,Color(129,207,224),str)
+		metadmin.Log(str)
 		metadmin.AddViolation(ply:SteamID(),nil,"Cорвал пломбу с "..but.." без разрешения диспетчера.")
 		metadmin.GetViolations(ply:SteamID(), function(data)
 			metadmin.players[ply:SteamID()].violations = data
@@ -180,12 +215,17 @@ hook.Add("PlayerInitialSpawn", "metadmin", function(ply)
 	spawn(ply)
 	metadmin.SendSettings(ply)
 	ply.plombs = {}
+	if ply:IsAdmin() and metadmin.notifver then
+		timer.Simple(2,function()
+			metadmin.Notify(ply,Color(129,207,224),"Доступно обновление MetAdmin!",Color(129,207,224),"\nТекущая версия: ",Color(0,102,255),metadmin.version,Color(129,207,224),"\nНовая версия: ",Color(0,102,255),metadmin.notifver)
+		end)
+	end
 end)
 
 function refreshquestions()
-	metadmin.questions = {}
 	metadmin.GetQuestions(
 		function(data)
+			metadmin.questions = {}
 			for k, v in pairs(data) do
 				id = tonumber(v.id)
 				metadmin.questions[id] = {}
@@ -209,7 +249,7 @@ local function GetNick(sid,def)
 	return nick
 end
 local status = {[0]="На проверке","Сдал","Не сдал"}
-net.Receive( "metadmin.action", function(len, ply)
+net.Receive("metadmin.action", function(len,ply)
 	if not ULib.ucl.query(ply,"ma.pl") then return end
 	local sid = net.ReadString()
 	local action = net.ReadInt(5)
@@ -224,21 +264,20 @@ net.Receive( "metadmin.action", function(len, ply)
 		metadmin.view_answers(ply,sid,tonumber(str))
 	elseif action == 5 and ULib.ucl.query(ply,"ma.setstattest") then
 		local stat = net.ReadInt(4)
-		metadmin.SetStatusTest(str,stat)
+		local tab = metadmin.players[sid].exam_answers
+		local answers_tab = {}
+		for k,v in pairs(tab) do
+			answers_tab = v
+		end
+		if (answers_tab.ssadmin != "" and answers_tab.ssadmin != ply:SteamID()) and not ULib.ucl.query(ply,"ma.forcesetstattest") then metadmin.Notify(ply,Color(129,207,224),"Вы не можете изменить статус теста!") return end
+		metadmin.SetStatusTest(str,stat,ply:SteamID())
 		metadmin.GetTests(sid, function(data)
 			metadmin.players[sid].exam_answers = data
 		end)
-		ply:ChatPrint("Статус изменен")
+		metadmin.Notify(ply,"Статус изменен")
 		local target = player.GetBySteamID(sid)
 		if target then
-			local tab = metadmin.players[sid].exam_answers
-			for k,v in pairs(tab) do
-				if tonumber(str) == tonumber(v.id) then
-					net.Start("metadmin.notify")
-						net.WriteString(ply:Nick().." установил статус \""..status[stat].."\" на Ваш тест ("..metadmin.questions[tonumber(v.questions)].name..")")
-					net.Send(target)
-				end
-			end
+			metadmin.Notify(target,Color(129,207,224),ply:Nick().." установил статус \""..status[stat].."\" на Ваш тест ("..metadmin.questions[tonumber(answers_tab.questions)].name..")")
 		end
 	elseif action == 7 and ULib.ucl.query(ply,"ma.settalon") then
 		metadmin.settalon(ply,sid,1)
@@ -264,15 +303,15 @@ net.Receive("metadmin.settings", function(len, ply)
 	metadmin.SendSettings(ply)
 end)
 
-net.Receive( "metadmin.order", function(len, ply)
+net.Receive("metadmin.order", function(len, ply)
 	if not ULib.ucl.query(ply,"ma.order") then return end
 	local tar = net.ReadEntity()
 	local plomb = net.ReadString()
 	if not metadmin.plombs[plomb] then return end
 	tar.plombs[plomb] = true
-	net.Start("metadmin.notify")
-		net.WriteString(ply:Nick().." разрешил "..tar:Nick().." сорвать пломбу с "..metadmin.plombs[plomb])
-	net.Broadcast()
+	local str = ply:Nick().." разрешил "..tar:Nick().." сорвать пломбу с "..metadmin.plombs[plomb]
+	metadmin.Notify(false,Color(129,207,224),str)
+	metadmin.Log(str)
 end)
 
 function metadmin.settalon(ply,sid,type)
@@ -282,7 +321,8 @@ function metadmin.settalon(ply,sid,type)
 				metadmin.players[sid].status.nom = metadmin.players[sid].status.nom + 1
 				metadmin.players[sid].status.date = os.time()
 				metadmin.players[sid].status.admin = ply:SteamID()
-				ply:ChatPrint("Вы успешно отобрали талон.")
+				metadmin.Notify(ply,Color(129,207,224),"Вы успешно отобрали талон.")
+				metadmin.Log(ply:Nick().." отобрал талон у игрока "..sid)
 				metadmin.SaveData(sid)
 			end
 		else
@@ -290,7 +330,8 @@ function metadmin.settalon(ply,sid,type)
 				metadmin.players[sid].status.nom = metadmin.players[sid].status.nom - 1
 				metadmin.players[sid].status.date = os.time()
 				metadmin.players[sid].status.admin = ply:SteamID()
-				ply:ChatPrint("Вы успешно вернули талон.")
+				metadmin.Notify(ply,Color(129,207,224),"Вы успешно вернули талон.")
+				metadmin.Log(ply:Nick().." вернул талон игроку "..sid)
 				metadmin.SaveData(sid)
 			end
 		end
@@ -299,7 +340,7 @@ function metadmin.settalon(ply,sid,type)
 	end
 end
 
-net.Receive( "metadmin.violations", function(len, ply)
+net.Receive("metadmin.violations",function(len,ply)
 	if not ULib.ucl.query(ply,"ma.viewviolations") then return end
 	local action = net.ReadInt(3)
 	local sid = net.ReadString()
@@ -322,7 +363,7 @@ end
 function metadmin.violationremove(call,sid,id)
 	id = tonumber(id)
 	if IsValid(call) then
-		call:ChatPrint("Нарушение удалено.")
+		metadmin.Notify(call,Color(129,207,224),"Нарушение удалено.")
 	end
 	metadmin.RemoveViolation(id)
 	metadmin.GetViolations(sid, function(data)
@@ -366,6 +407,7 @@ function metadmin.profile(call,sid)
 				v.questions = tonumber(v.questions)
 				v.name = (metadmin.questions[v.questions] and metadmin.questions[v.questions].name) or "Шаблон удален"
 				v.admin = GetNick(v.admin,v.admin)
+				v.ssadmin = GetNick(v.ssadmin,v.ssadmin)
 			end
 		end
 		tab.rank = metadmin.players[sid].rank
@@ -402,7 +444,7 @@ function metadmin.setrank(call,sid,rank)
 	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	if metadmin.players[sid] then
 		if metadmin.ranks[rank] then
-			if metadmin.players[sid].rank == rank then call:ChatPrint("Что ты пытаешься сделать? Ранги идентичны!") return end
+			if metadmin.players[sid].rank == rank then metadmin.Notify(call,Color(129,207,224),"Что ты пытаешься сделать? Ранги идентичны!") return end
 			metadmin.players[sid].rank = rank
 			metadmin.SaveData(sid)
 			local target = player.GetBySteamID(sid)
@@ -412,9 +454,9 @@ function metadmin.setrank(call,sid,rank)
 			end
 			local nick = IsValid(call) and call:Nick() or "CONSOLE"
 			local steamid = IsValid(call) and call:SteamID() or "CONSOLE"
-			net.Start("metadmin.notify")
-				net.WriteString(nick.." установил ранг игроку "..GetNick(sid,sid).."|"..metadmin.ranks[rank])
-			net.Broadcast()
+			local str = nick.." установил ранг игроку "..GetNick(sid,sid).."|"..metadmin.ranks[rank]
+			metadmin.Notify(false,Color(129,207,224),str)
+			metadmin.Log(str)
 			metadmin.AddExamInfo(sid,rank,steamid,"Установка ранга через команду.",3)
 			timer.Simple(1,function()
 				metadmin.GetExamInfo(sid, function(data)
@@ -422,7 +464,7 @@ function metadmin.setrank(call,sid,rank)
 				end)
 			end)
 		else
-			call:ChatPrint("Ранг "..rank.." отсутствует в metadmin!")
+			metadmin.Notify(call,Color(129,207,224),"Ранг "..rank.." отсутствует в metadmin!")
 		end
 	else
 		metadmin.GetDataSID(sid,function() metadmin.setrank(call,sid,rank) end,true)
@@ -441,9 +483,9 @@ function metadmin.promotion(call,sid,note)
 			metadmin.setulxrank(target,newgroup)
 		end
 		local nick = GetNick(sid,sid)
-		net.Start("metadmin.notify")
-			net.WriteString("Игрок "..nick.." был повышен. Теперь он "..metadmin.ranks[newgroup])
-		net.Broadcast()
+		local str = call:Nick().." повысил игрока "..nick.." до "..metadmin.ranks[newgroup]
+		metadmin.Notify(false,Color(129,207,224),str)
+		metadmin.Log(str)
 		metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,1)
 		metadmin.players[sid].rank = newgroup
 		metadmin.SaveData(sid)
@@ -465,9 +507,9 @@ function metadmin.demotion(call,sid,note)
 			metadmin.setulxrank(target,newgroup)
 		end
 		local nick = GetNick(sid,sid)
-		net.Start("metadmin.notify")
-			net.WriteString("Игрок "..nick.." был понижен. Теперь он "..metadmin.ranks[newgroup])
-		net.Broadcast()
+		local str = call:Nick().." понизил игрока "..nick.." до "..metadmin.ranks[newgroup]
+		metadmin.Notify(false,Color(129,207,224),str)
+		metadmin.Log(str)
 		metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,2)
 		metadmin.players[sid].rank = newgroup
 		metadmin.SaveData(sid)
@@ -479,43 +521,39 @@ function metadmin.demotion(call,sid,note)
 	end
 end
 
-net.Receive( "metadmin.qaction", function(len, ply)
+net.Receive("metadmin.qaction",function(len,ply)
 	if not ULib.ucl.query(ply,"ma.questionsmenu") then return end
 	local action = net.ReadInt(5)
 	local id = net.ReadInt(32)
 	if action == 1 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsimn") then
 		if metadmin.questions[id].enabled == 1 then action = "отключен" else action = "включен" end
-		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно "..action)
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно "..action)
 		metadmin.SaveQuestion(id,nil,metadmin.questions[id].enabled == 1 and 0 or 1)
-		refreshquestions()
 	elseif action == 2 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsremove") then
-		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно удален")
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно удален")
 		metadmin.RemoveQuestion(id)
-		refreshquestions()
 	elseif action == 3 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
 		local tab = net.ReadTable()
 		metadmin.SaveQuestion(id,util.TableToJSON(tab))
-		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно изменен")
-		refreshquestions()
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно изменен")
 	elseif action == 4 and ULib.ucl.query(ply,"ma.questionscreate") then
 		local name = net.ReadString()
 		metadmin.AddQuestion(name)
-		ply:ChatPrint("Шаблон "..name.." успешно добавлен")
-		refreshquestions()
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..name.." успешно добавлен")
 	elseif action == 5 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
 		metadmin.SaveQuestionName(id,net.ReadString())
-		ply:ChatPrint("Шаблон "..metadmin.questions[id].name.." успешно изменен")
-		refreshquestions()
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно изменен")
 	else return end
+	refreshquestions()
 end)
 
 function metadmin.sendquestions(call,sid,id)
 	local target = player.GetBySteamID(sid)
 	if target then
-		if target == call then call:ChatPrint("Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
-		if target.anstoques then call:ChatPrint("Игрок еще не ответил на предыдущий тест, который выдал "..target.anstoques.nick) return end
-		if not metadmin.questions[id] then return call:ChatPrint("Такого шаблона нет!") end
-		if metadmin.questions[id].enabled == 0 then return call:ChatPrint("Этот шаблон отключен!") end
+		if target == call then metadmin.Notify(call,Color(129,207,224),"Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
+		if target.anstoques then metadmin.Notify(call,Color(129,207,224),"Игрок еще не ответил на предыдущий тест, который выдал "..target.anstoques.nick) return end
+		if not metadmin.questions[id] then return metadmin.Notify(call,Color(129,207,224),"Такого шаблона нет!") end
+		if metadmin.questions[id].enabled == 0 then return metadmin.Notify(call,Color(129,207,224),"Этот шаблон отключен!") end
 		net.Start("metadmin.questions")
 			net.WriteTable(metadmin.questions[id].questions)
 		net.Send(target)
@@ -523,10 +561,9 @@ function metadmin.sendquestions(call,sid,id)
 		target.anstoques.nick = call:Nick()
 		target.anstoques.adminsid = call:SteamID()
 		target.anstoques.idquestions = id
-		net.Start("metadmin.notify")
-			net.WriteString(call:Nick().." отправил тест ("..metadmin.questions[id].name..") игроку "..target:Nick())
-		net.Broadcast()
-		call:ChatPrint("Вопросы("..metadmin.questions[id].name..") отправленны игроку "..target:Nick())
+		local str = call:Nick().." отправил тест ("..metadmin.questions[id].name..") игроку "..target:Nick()
+		metadmin.Notify(false,Color(129,207,224),str)
+		metadmin.Log(str)
 	end
 end
 function metadmin.view_answers(call,sid,id)
@@ -553,9 +590,9 @@ net.Receive("metadmin.answers", function(len, ply)
 	if not ply.anstoques then return end
 	local ans = net.ReadTable()
 	if metadmin.questions[ply.anstoques.idquestions].enabled == 0 then return end
-	net.Start("metadmin.notify")
-		net.WriteString("Игрок "..ply:Nick().." ответил на вопросы теста. Его результат записан и вскоре будет проверен.")
-	net.Broadcast()
+	local str = "Игрок "..ply:Nick().." ответил на вопросы теста. Его результат записан и вскоре будет проверен."
+	metadmin.Notify(false,Color(129,207,224),str)
+	metadmin.Log(str)
 	metadmin.AddTest(ply:SteamID(),ply.anstoques.idquestions,util.TableToJSON(ans),ply.anstoques.adminsid)
 	metadmin.GetTests(ply:SteamID(), function(data)
 		metadmin.players[ply:SteamID()].exam_answers = data
@@ -564,7 +601,7 @@ net.Receive("metadmin.answers", function(len, ply)
 end)
 
 hook.Add("PlayerSay", "XER", function(ply,text)
-	if ( string.find(text,"Диспетчер",1)) then
+	if string.find(text,"Диспетчер",1) then
 		for k,v in pairs(player.GetAll()) do
 			if v:GetUserGroup() == metadmin.disp then
 				v:PrintMessage(HUD_PRINTCENTER,'Вас вызывают!')
@@ -583,10 +620,10 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 			metadmin.players[sid].rank = data[1].group
 			metadmin.players[sid].status = util.JSONToTable(data[1].status)
 			if badpl then
-				http.Fetch("http://metrostroi.net/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
+				http.Fetch("http://metrostroi.net/metadmin/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
 			end
 			if synch then
-				http.Fetch("http://metrostroi.net/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
+				http.Fetch("http://metrostroi.net/metadmin/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
 			end
 			local target = player.GetBySteamID(sid)
 			if target then
@@ -615,7 +652,7 @@ end
 
 hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
 	if metadmin.voice then
-		if listener:IsSuperAdmin() or talker:IsSuperAdmin() then return true end
+		if listener:IsAdmin() then return true end
 		if metadmin.players[talker:SteamID()].rank == metadmin.disp then
 			return true
 		end

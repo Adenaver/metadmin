@@ -1,5 +1,5 @@
 metadmin = metadmin or {}
-metadmin.category = "MetrostroiAdmin" -- Категория в ulx
+metadmin.category = "MetAdmin" -- Категория в ulx
 net.Receive("metadmin.settings", function()
 	local tab = net.ReadTable()
 	for k,v in pairs(tab) do
@@ -20,18 +20,18 @@ net.Receive("metadmin.questionstab", function()
 	metadmin.questions = net.ReadTable()
 end)
 net.Receive("metadmin.notify", function()
-  chat.AddText(Color(129,207,224),net.ReadString())
+  chat.AddText(unpack(net.ReadTable()))
 end)
-CreateClientConVar( "metadmin_preview", 1, true, false )
-local buttonmenu = CreateClientConVar( "metadmin_buttonmenu", "F4", true, false )
+CreateClientConVar("metadmin_preview",1,true,false)
+local buttonmenu = CreateClientConVar("metadmin_buttonmenu","F4",true,false)
 
 local function Access(permis)
 	return ULib.ucl.query(LocalPlayer(),permis)
 end
 
 function metadmin.menu()
-	local Frame = vgui.Create( "DFrame" )
-	Frame:SetSize( 800, 260 )
+	local Frame = vgui.Create("DFrame")
+	Frame:SetSize(800,260)
 	Frame:SetTitle("Меню")
 	Frame:SetDraggable( true )
 	Frame.btnMaxim:SetVisible(false)
@@ -1335,7 +1335,7 @@ function metadmin.profile(tab)
 			local info = vgui.Create("DLabel",DPanel)
 			info:SetSize(574,15)
 			info:SetPos(25,5)
-			info:SetText("| "..v.name.." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date)..(v.admin != "" and " | Выдал: "..v.admin or ""))
+			info:SetText("| "..v.name.." | Дата: "..os.date( "%X - %d/%m/%Y" ,v.date)..(v.admin != "" and " | Выдал: "..v.admin or "")..(v.ssadmin != "" and " | Проверил: "..v.ssadmin or ""))
 			num = num + 1
 		end
 		tabs:AddSheet("Результаты тестов", answers,"icon16/page_edit.png")
@@ -1534,10 +1534,20 @@ function metadmin.question(tab)
 		local question = vgui.Create("DLabel",DPanel)
 		question:SetSize(760,20)
 		question:SetPos(5,5+num*40)
-		question:SetText(v..":")
-		answer[k] = vgui.Create("DTextEntry",DPanel)
-		answer[k]:SetPos(5,25+num*40)
-		answer[k]:SetSize(760,20)
+		question:SetText((isstring(v) and v or v.question)..":")
+		if istable(v) then
+			answer[k] = vgui.Create("DComboBox",DPanel)
+			answer[k]:SetColor(color_black)
+			answer[k]:SetPos(5,25+num*40)
+			answer[k]:SetSize(760,20)
+			for k2, v2 in pairs(v.answers) do
+				answer[k]:AddChoice(v2)
+			end
+		else
+			answer[k] = vgui.Create("DTextEntry",DPanel)
+			answer[k]:SetPos(5,25+num*40)
+			answer[k]:SetSize(760,20)
+		end
 		num = num+1
 	end
 	local send = vgui.Create("DButton",Frame)
@@ -1580,11 +1590,12 @@ function metadmin.viewanswers(tab)
 		local question = vgui.Create("DLabel",DPanel)
 		question:SetSize(760,20)
 		question:SetPos(5,5+num*40)
-		question:SetText(tab.questions[k]..":")
+		local quest = tab.questions[k]
+		question:SetText((isstring(quest) and quest or quest.question)..":")
 		local answer = vgui.Create("DTextEntry",DPanel)
 		answer:SetPos(5,25+num*40)
 		answer:SetSize(760,20)
-		answer:SetText(tab.answers[k])
+		answer:SetText(tab.answers[k] or "ОШИБКА")
 		answer:SetEditable(false)
 		num = num+1
 	end
@@ -1604,7 +1615,7 @@ function metadmin.questions2(id,type,ply)
 	local maxn = #tab
 	local questions2 = {}
 	local Frame = vgui.Create("DFrame")
-	Frame:SetSize(800,math.min(600,80+20*maxn))
+	Frame:SetSize(800,math.min(600,70+20*maxn))
 	Frame:SetTitle(type == "edit"and"Редактирование шаблона вопросов "or"Шаблон вопросов "..metadmin.questions[id].name)
 	Frame.btnMaxim:SetVisible(false)
 	Frame.btnMinim:SetVisible(false)
@@ -1612,7 +1623,7 @@ function metadmin.questions2(id,type,ply)
 	Frame:Center()
 	Frame:MakePopup()
 	local DScrollPanel = vgui.Create("DScrollPanel",Frame)
-	DScrollPanel:SetSize(790,math.min(540,60+20*maxn))
+	DScrollPanel:SetSize(790,math.min(540,45+20*maxn))
 	DScrollPanel:SetPos(1,25)
 	local DPanel = vgui.Create("DPanel",DScrollPanel)
 	DPanel:SetPos(5,5)
@@ -1624,18 +1635,30 @@ function metadmin.questions2(id,type,ply)
 			questions2[k] = vgui.Create("DTextEntry",DPanel)
 			questions2[k]:SetSize(760,20)
 			questions2[k]:SetPos(5,5+num*20)
-			questions2[k]:SetText(v)
+			questions2[k]:SetText(isstring(v) and v or v.question)
 		else
 			local question = vgui.Create("DLabel",DPanel)
 			question:SetSize(760,20)
 			question:SetPos(5,5+num*20)
-			question:SetText(k.."."..v)
+			question:SetText(k.."."..(isstring(v) and v or v.question))
+			if istable(v) then
+				for k2,v2 in pairs(v.answers) do
+					local answer = vgui.Create("DLabel",DPanel)
+					answer:SetSize(760,20)
+					answer:SetPos(15,25+num*20)
+					answer:SetText(k2.."."..v2)
+					num = num + 1
+				end
+			end
 		end
 		num = num+1
 	end
+	Frame:SetSize(800,math.min(600,70+20*num))
+	DScrollPanel:SetSize(790,math.min(540,50+20*num))
+	DPanel:SetSize(790,10+20*num)
 	local send = vgui.Create("DButton",Frame)
-	send:SetPos(5,math.min(575,55+20*maxn))
-	send:SetText( type == "edit" and "Сохранить" or ply and "Отправить игроку "..ply.nick or "Обратно в меню" )
+	send:SetPos(5,math.min(575,45+20*num))
+	send:SetText(type == "edit" and "Сохранить" or ply and "Отправить игроку "..ply.nick or "Обратно в меню")
 	send:SetSize(790,20)
 	if type == "edit" then
 		local DPanel2 = vgui.Create("DPanel",Frame)

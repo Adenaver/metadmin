@@ -17,9 +17,10 @@ CREATE TABLE IF NOT EXISTS `answers` (
   `sid` text NOT NULL,
   `date` text NOT NULL,
   `questions` text NOT NULL,
+  `status` int(11) NOT NULL DEFAULT '0',
   `answers` text NOT NULL,
   `admin` text NOT NULL,
-  `status` int(11) NOT NULL DEFAULT '0'
+  `ssadmin` text NOT NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------

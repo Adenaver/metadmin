@@ -9,7 +9,8 @@ local function Start()
 		`questions` text NOT NULL,
 		`status` int(11) NOT NULL DEFAULT '0',
 		`answers` text NOT NULL,
-		`admin` text NOT NULL
+		`admin` text NOT NULL,
+		`ssadmin` text NOT NULL
 		)]])
 	end
 	if not sql.TableExists("examinfo") then
@@ -54,7 +55,7 @@ end
 Start()
 
 function metadmin.FIX()
-	sql.Query("ALTER TABLE answers ADD COLUMN admin text NOT NULL DEFAULT ''")
+	sql.Query("ALTER TABLE answers ADD COLUMN ssadmin text NOT NULL DEFAULT ''")
 end
 function metadmin.GetData(sid,cb)
     local result = sql.Query("SELECT * FROM players WHERE SID='"..sid.."'")
@@ -136,8 +137,8 @@ function metadmin.AddTest(sid,ques,ans,adminsid)
 	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..",'"..adminsid.."')")
 end
 
-function metadmin.SetStatusTest(id,status)
-	sql.Query("UPDATE `answers` SET `status` = '"..status.."' WHERE `id`='"..tonumber(id).."'")
+function metadmin.SetStatusTest(id,status,ssadmin)
+	sql.Query("UPDATE `answers` SET `status` = '"..status.."',`ssadmin` = '"..ssadmin.."' WHERE `id`='"..tonumber(id).."'")
 end
 
 function metadmin.GetViolations(sid,cb)

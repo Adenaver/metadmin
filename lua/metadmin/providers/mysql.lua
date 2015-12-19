@@ -1,6 +1,6 @@
 require('mysqloo')
 
-local db = mysqloo.connect('localhost', 'root', '', '', 3306) -- Хост,юзер,пароль,название бд, порт
+local db = mysqloo.connect(metadmin.mysql.host, metadmin.mysql.user, metadmin.mysql.pass, metadmin.mysql.database, metadmin.mysql.port)
 
 function db:onConnected()
 	local utf8 = db:query("SET names 'utf8'")
@@ -242,8 +242,8 @@ function metadmin.AddTest(sid,ques,ans,adminsid)
     q:start()
 end
 
-function metadmin.SetStatusTest(id,status)
-    local q = db:query("UPDATE `answers` SET `status` = '"..tonumber(status).."' WHERE `id`='"..tonumber(id).."'")
+function metadmin.SetStatusTest(id,status,ssadmin)
+    local q = db:query("UPDATE `answers` SET `status` = '"..status.."',`ssadmin` = '"..ssadmin.."' WHERE `id`='"..tonumber(id).."'")
   q.onError = function(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
