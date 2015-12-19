@@ -652,7 +652,7 @@ end
 
 hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
 	if metadmin.voice then
-		if listener:IsAdmin() then return true end
+		if listener:IsSuperAdmin() or talker:IsSuperAdmin() then return true end
 		if metadmin.players[talker:SteamID()].rank == metadmin.disp then
 			return true
 		end
