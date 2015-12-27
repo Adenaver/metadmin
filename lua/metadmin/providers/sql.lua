@@ -10,7 +10,7 @@ local function Start()
 		`status` int(11) NOT NULL DEFAULT '0',
 		`answers` text NOT NULL,
 		`admin` text NOT NULL,
-		`ssadmin` text NOT NULL
+		`ssadmin` text NOT NULL DEFAULT ''
 		)]])
 	end
 	if not sql.TableExists("examinfo") then
@@ -134,7 +134,7 @@ function metadmin.GetTests(sid,cb)
 end
 
 function metadmin.AddTest(sid,ques,ans,adminsid)
-	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`status`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."','0',"..sql.SQLStr(ans)..",'"..adminsid.."')")
+	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..",'"..adminsid.."')")
 end
 
 function metadmin.SetStatusTest(id,status,ssadmin)
