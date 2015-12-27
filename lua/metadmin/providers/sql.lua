@@ -134,7 +134,7 @@ function metadmin.GetTests(sid,cb)
 end
 
 function metadmin.AddTest(sid,ques,ans,adminsid)
-	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."',"..sql.SQLStr(ans)..",'"..adminsid.."')")
+	sql.Query("INSERT INTO `answers` (`id`,`sid`,`date`,`questions`,`status`,`answers`,`admin`) VALUES (NULL,'"..sid.."','"..os.time().."','"..tonumber(ques).."','0',"..sql.SQLStr(ans)..",'"..adminsid.."')")
 end
 
 function metadmin.SetStatusTest(id,status,ssadmin)
