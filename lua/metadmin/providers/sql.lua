@@ -120,7 +120,7 @@ function metadmin.RemoveQuestion(id)
 end
 
 function metadmin.AddQuestion(name)
-    sql.Query("INSERT INTO `questions` (`id`,`name`,`questions`,`enabled`) VALUES (NULL,"..sql.SQLStr(name)..",'{}','0')")
+	sql.Query("INSERT INTO `questions` (`id`,`name`,`questions`,`enabled`) VALUES (NULL,"..sql.SQLStr(name)..",'{}','0')")
 end
 
 function metadmin.GetTests(sid,cb)

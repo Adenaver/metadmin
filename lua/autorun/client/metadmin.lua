@@ -30,29 +30,13 @@ local function Access(permis)
 end
 
 function metadmin.menu()
-	local Frame = vgui.Create("DFrame")
-	Frame:SetSize(800,260)
-	Frame:SetTitle("Меню")
-	Frame:SetDraggable( true )
-	Frame.btnMaxim:SetVisible(false)
-	Frame.btnMinim:SetVisible(false)
-	Frame:MakePopup()
-	Frame:Center()
-	if Access("ma.questionsmenu") then
-		local questlist = vgui.Create("DButton",Frame)
-		questlist:SetPos(630,2.5)
-		questlist:SetText("Вопросы")
-		questlist:SetSize(60,20)
-		questlist.DoClick = function() metadmin.questionslist() Frame:Close() end
-	end
-	local settings = vgui.Create("DButton",Frame)
-	settings:SetPos(690,2.5)
-	settings:SetText("Настройки")
-	settings:SetSize(70,20)
-	settings.DoClick = function() metadmin.settings() Frame:Close() end
-	local playerslist = vgui.Create("DListView",Frame)
-	playerslist:SetPos(10,30)
-	playerslist:SetSize(780,220)
+	local tabs = vgui.Create("DPropertySheet")
+	tabs:SetPos(0,0)
+	tabs:SetSize(800,260)
+	tabs:MakePopup()
+	tabs:Center()
+	
+	local playerslist = vgui.Create("DListView",tabs)
 	playerslist:SetMultiSelect(false)
 	local menu
 	playerslist.OnClickLine = function(panel,line)
@@ -65,10 +49,10 @@ function metadmin.menu()
 		
 		local row = menu:AddOption("Профиль", function()
 			RunConsoleCommand("ulx","prid",line:GetValue(3))
-			Frame:Close()
+			tabs:Remove()
 		end)
 		row:SetIcon("icon16/information.png")
-		
+			
 		local sub, row = menu:AddSubMenu("Приказы")
 		row:SetIcon("icon16/application_error.png")
 			local sub2, row = sub:AddSubMenu("Пломбы")
@@ -79,11 +63,10 @@ function metadmin.menu()
 							net.WriteEntity(line.ply)
 							net.WriteString(k)
 						net.SendToServer()
-						Frame:Close()
+						tabs:Remove()
 					end)
 					row:SetTextInset(10,0)
 				end
-				
 		if Access("ma.starttest") then
 			local sub, row = menu:AddSubMenu("Начать тест")
 			for k,v in pairs(metadmin.questions) do
@@ -98,17 +81,16 @@ function metadmin.menu()
 								net.WriteString(k)
 							net.SendToServer()
 						end
-						Frame:Close()
+						tabs:Remove()
 					end)
 					row:SetTextInset(10,0)
 				end
 			end
 			row:SetIcon("icon16/help.png")
-		end
-			
+		end	
 		local row = menu:AddOption("Отмена")
 		row:SetIcon("icon16/cancel.png")
-		
+			
 		menu.Remove = function(m)
 			if IsValid(line) then
 				line:SetSelected(false)
@@ -116,12 +98,85 @@ function metadmin.menu()
 		end
 		menu:Open()
 	end
-	playerslist:AddColumn("Ник"):SetFixedWidth(400)
-	playerslist:AddColumn("Группа"):SetFixedWidth(180)
-	playerslist:AddColumn("SteamID"):SetFixedWidth(200)
-	for k,v in pairs(player.GetAll()) do
-		local line = playerslist:AddLine(v:Nick(),metadmin.ranks[v:GetUserGroup()],v:SteamID())
-		line.ply = v
+		playerslist:AddColumn("Ник"):SetFixedWidth(410)
+		playerslist:AddColumn("Группа"):SetFixedWidth(220)
+		playerslist:AddColumn("SteamID")
+		for k,v in pairs(player.GetAll()) do
+			local line = playerslist:AddLine(v:Nick(),metadmin.ranks[v:GetUserGroup()],v:SteamID())
+			line.ply = v
+		end
+	tabs:AddSheet("Онлайн",playerslist)
+	
+	
+	--[[local DPanel = vgui.Create("DPanel",tabs)
+	local ranks = vgui.Create("DListView",DPanel)
+	ranks:SetMultiSelect(false)
+	ranks:SetSize(150,225)
+	ranks:AddColumn("Ранги")
+	for k,v in pairs(metadmin.ranks) do
+		local li = ranks:AddLine(v)
+		li.k = k
+		li.v = v
+	end
+	
+	local playerslist = vgui.Create("DListView",DPanel)
+	playerslist:SetMultiSelect(false)
+	playerslist:SetPos(150,0)
+	playerslist:SetSize(634,225)
+	playerslist:AddColumn("Ник"):SetFixedWidth(410)
+	playerslist:AddColumn("SteamID")
+	tabs:AddSheet("Оффлайн",DPanel)]]
+	
+	
+	if Access("ma.questionsmenu") then
+		local questlist = vgui.Create("DImage",tabs)
+		questlist:SetPos(748,3)
+		questlist:SetSize(16,16)
+		questlist:SetImage("icon16/table.png")
+		questlist:SetToolTip("Вопросы")
+		questlist:SetMouseInputEnabled(true)
+		function questlist:OnCursorEntered()
+			self:SetCursor("hand")
+		end
+		function questlist:OnCursorExited()
+			self:SetCursor("arrow")
+		end
+		function questlist:OnMouseReleased(code)
+			metadmin.questionslist()
+			tabs:Remove()
+		end
+	end
+	local settings = vgui.Create("DImage",tabs)
+	settings:SetPos(764,3)
+	settings:SetSize(16,16)
+	settings:SetImage("icon16/bullet_wrench.png")
+	settings:SetToolTip("Настройки")
+	settings:SetMouseInputEnabled(true)
+	function settings:OnCursorEntered()
+		self:SetCursor("hand")
+	end
+	function settings:OnCursorExited()
+		self:SetCursor("arrow")
+	end
+	function settings:OnMouseReleased()
+		metadmin.settings()
+		tabs:Remove()
+	end
+	
+	local cls = vgui.Create("DImage",tabs)
+	cls:SetPos(780,3)
+	cls:SetSize(16,16)
+	cls:SetImage("icon16/cross.png")
+	cls:SetToolTip("Закрыть")
+	cls:SetMouseInputEnabled(true)
+	function cls:OnCursorEntered()
+		self:SetCursor("hand")
+	end
+	function cls:OnCursorExited()
+		self:SetCursor("arrow")
+	end
+	function cls:OnMouseReleased()
+		tabs:Remove()
 	end
 end
 
@@ -829,7 +884,7 @@ function metadmin.playeract(nick,sid,rank,Frame)
 		end)
 		row:SetIcon("icon16/information.png")
 	end
-	if Access("ma.settalon") then
+	if Access("ma.givetalon") then
 		row = menu:AddOption("Вернуть талон", function()
 			net.Start("metadmin.action")
 				net.WriteString(sid)
@@ -838,14 +893,30 @@ function metadmin.playeract(nick,sid,rank,Frame)
 			Frame:Close()
 			RunConsoleCommand("ulx","prid",sid)
 		end)
+	end
+	if Access("ma.taketalon") then
 		row:SetIcon("icon16/tag_blue_add.png")
 		row = menu:AddOption("Забрать талон", function()
-			net.Start("metadmin.action")
-				net.WriteString(sid)
-				net.WriteInt(8,5)
-			net.SendToServer()
+			local frame2 = vgui.Create("DFrame")
+			frame2:SetSize(400, 60)
+			frame2:SetTitle("Причина")
+			frame2:Center()
+			frame2.btnMaxim:SetVisible(false)
+			frame2.btnMinim:SetVisible(false)
+			local text = vgui.Create("DTextEntry",frame2)
+			text:StretchToParent(5,29,5,5)
+			text.OnEnter = function()
+				net.Start("metadmin.action")
+					net.WriteString(sid)
+					net.WriteInt(8,5)
+					net.WriteString(text:GetValue())
+				net.SendToServer()
+				frame2:Close()
+				RunConsoleCommand("ulx","prid",sid)
+			end
+			text:RequestFocus()
+			frame2:MakePopup()
 			Frame:Close()
-			RunConsoleCommand("ulx","prid",sid)
 		end)
 		row:SetIcon("icon16/tag_blue_delete.png")
 	end
@@ -1049,13 +1120,51 @@ function metadmin.profile(tab)
 	DPanel:SetPos(5,30)
 	DPanel:SetSize(590,80)
 	DLabel:SetDark(1)
+	local actions = false
+	if Access("ma.pl") then
+		actions = vgui.Create("DButton",Frame)
+		actions:SetPos(504,3)
+		actions:SetText("Действия")
+		actions:SetSize(60,18)
+		actions.DoClick = function()
+			metadmin.playeract(tab.Nick,tab.SID,tab.rank,Frame)
+		end
+	end
+	local report = vgui.Create("DButton",Frame)
+	report:SetPos(actions and 424 or 484,3)
+	report:SetText("Пожаловаться")
+	report:SetSize(80,18)
+	report:SetDisabled(true)
+	report:SetToolTip("Скоро будет")
+	report.DoClick = function()
+		local frame = vgui.Create("DFrame")
+		frame:SetSize(585,140)
+		frame:SetTitle("Жалоба на "..tab.Nick)
+		frame:SetDraggable(true)
+		frame:Center()
+		frame:MakePopup()
+		frame.btnMaxim:SetVisible(false)
+		frame.btnMinim:SetVisible(false)
+		local text = vgui.Create("DTextEntry",frame)
+		text:SetPos(5,25)
+		text:SetSize(575,85)
+		text:SetMultiline(true)
+		text:SetText("")
+		local send = vgui.Create("DButton",frame)
+		send:SetPos(5,115)
+		send:SetText("Отправить")
+		send:SetSize(575,20)
+		send.DoClick = function()
+			net.Start("metadmin.report")
+				net.WriteTable({SID = tab.SID,report = text:GetValue()})
+			net.SendToServer()
+			frame:Close()
+		end
+		Frame:Close()
+	end
 	if tab.synch then
 		local synch = vgui.Create("DImage",Frame)
-		if Access("ma.pl") then
-			synch:SetPos(484,3)
-		else
-			synch:SetPos(544,3)
-		end
+		synch:SetPos((report and actions) and 404 or actions and 484 or report and 464 or 544,4)
 		synch:SetSize(16,16)
 		local synched = tab.synch.rank == tab.rank
 		synch:SetImage(synched and "icon16/tick.png" or "icon16/cross.png")
@@ -1086,15 +1195,6 @@ function metadmin.profile(tab)
 					Derma_Query("Ранг: "..tab.synch.rank..com,"Синхронизация","Закрыть")
 				end
 			end
-		end
-	end
-	if Access("ma.pl") then
-		local DButton = vgui.Create("DButton",Frame)
-		DButton:SetPos(504,3)
-		DButton:SetText("Действия")
-		DButton:SetSize(60,18)
-		DButton.DoClick = function()
-			metadmin.playeract(tab.Nick,tab.SID,tab.rank,Frame)
 		end
 	end
 	local nick = vgui.Create("DLabel",DPanel)
@@ -1239,7 +1339,8 @@ function metadmin.profile(tab)
 			DPanel:SetPos(0,65*num)
 			DPanel:SetSize(584,60)
 			DLabel:SetDark(1)
-			DPanel:SetBackgroundColor(v.type == 1 and Color(46,139,87) or v.type == 2 and Color(250,128,114) or Color(255,255,150))
+			v.type = tonumber(v.type)
+			DPanel:SetBackgroundColor((v.type == 1 and Color(46,139,87)) or (v.type == 2 and Color(250,128,114)) or (v.type == 3 and Color(255,255,150)) or Color(217,237,248))
 			local info = vgui.Create("DLabel",DPanel)
 			info:SetSize(574,15)
 			info:SetPos(5,5)
@@ -1344,7 +1445,7 @@ function metadmin.profile(tab)
 		local talon = vgui.Create("DPanel",tabs)
 		talon:SetBackgroundColor(Color(255,228,181))
 		talon.PaintOver = function(self,w,h)
-			surface.SetDrawColor(tab.status.nom == 1 and Color(3,111,35) or tab.status.nom == 2 and Color(255,255,0) or Color(178,34,34))
+			surface.SetDrawColor(tab.status.nom == 1 and Color(3,111,35) or tab.status.nom == 2 and Color(255,255,0) or tab.status.nom == 3 and Color(178,34,34) or Color(255,127,127))
 			draw.NoTexture()
 			surface.DrawPoly({{ x = 0, y = 0 },{ x = 40, y = 0 },{ x = w, y = h },{ x = w-40, y = h }})
 			draw.SimpleText(GetHostName(), "ma.font1", w/2, 20, Color(50,50,50), TEXT_ALIGN_CENTER)

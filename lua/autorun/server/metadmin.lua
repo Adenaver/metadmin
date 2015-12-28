@@ -2,7 +2,7 @@ metadmin = metadmin or {}
 metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
 metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX"
-metadmin.version = "19/12/2015"
+metadmin.version = "28/12/2015"
 
 if metadmin.provider == "mysql" then
 	metadmin.mysql.host = "localhost" -- Хост
@@ -113,13 +113,14 @@ util.AddNetworkString("metadmin.questionstab")
 util.AddNetworkString("metadmin.notify")
 util.AddNetworkString("metadmin.order")
 util.AddNetworkString("metadmin.settings")
+util.AddNetworkString("metadmin.report")
 
 for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
 end
 
 metadmin.questions = metadmin.questions or {}
-hook.Add( "InitPostEntity", "MetAdminInit", function()
+hook.Add("InitPostEntity","MetAdminInit",function()
 	ULib.ucl.registerAccess("ma.pl", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню с игроками.",metadmin.category)
 	ULib.ucl.registerAccess("ma.questionsmenu", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню вопросов.",metadmin.category)
 	for k, v in pairs(metadmin.prom) do
@@ -137,7 +138,8 @@ hook.Add( "InitPostEntity", "MetAdminInit", function()
 	ULib.ucl.registerAccess("ma.violationgive", ULib.ACCESS_SUPERADMIN, "Выдача нарушения игроку.",metadmin.category)
 	ULib.ucl.registerAccess("ma.violationremove", ULib.ACCESS_SUPERADMIN, "Удаление нарушения игроку.",metadmin.category)
 	ULib.ucl.registerAccess("ma.viewviolations", ULib.ACCESS_SUPERADMIN, "Просмотр нарушений игрока.",metadmin.category)
-	ULib.ucl.registerAccess("ma.settalon", ULib.ACCESS_SUPERADMIN, "Установка талона.",metadmin.category)
+	ULib.ucl.registerAccess("ma.taketalon", ULib.ACCESS_SUPERADMIN, "Возращение талон.",metadmin.category)
+	ULib.ucl.registerAccess("ma.givetalon", ULib.ACCESS_SUPERADMIN, "Отбирание талона.",metadmin.category)
 	ULib.ucl.registerAccess("ma.viewtalon", ULib.ACCESS_SUPERADMIN, "Просмотр талона.",metadmin.category)
 	ULib.ucl.registerAccess("ma.setstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.",metadmin.category)
 	ULib.ucl.registerAccess("ma.forcesetstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.(Без проверки)",metadmin.category)
@@ -168,7 +170,6 @@ function metadmin.Notify(target,...)
 end
 
 function metadmin.Log(str)
-	ServerLog(str)
 	file.Append("metadmin/log.txt","["..os.date( "%X - %d/%m/%Y",os.time()).."] "..str.."\r\n")
 end
 
@@ -217,7 +218,9 @@ hook.Add("PlayerInitialSpawn", "metadmin", function(ply)
 	ply.plombs = {}
 	if ply:IsAdmin() and metadmin.notifver then
 		timer.Simple(2,function()
-			metadmin.Notify(ply,Color(129,207,224),"Доступно обновление MetAdmin!",Color(129,207,224),"\nТекущая версия: ",Color(0,102,255),metadmin.version,Color(129,207,224),"\nНовая версия: ",Color(0,102,255),metadmin.notifver)
+			metadmin.Notify(ply,Color(129,207,224),"Доступно обновление MetAdmin!")
+			metadmin.Notify(ply,Color(129,207,224),"Текущая версия: ",Color(0,102,255),metadmin.version)
+			metadmin.Notify(ply,Color(129,207,224),"Актуальная версия: ",Color(0,102,255),metadmin.notifver)
 		end)
 	end
 end)
@@ -279,10 +282,10 @@ net.Receive("metadmin.action", function(len,ply)
 		if target then
 			metadmin.Notify(target,Color(129,207,224),ply:Nick().." установил статус \""..status[stat].."\" на Ваш тест ("..metadmin.questions[tonumber(answers_tab.questions)].name..")")
 		end
-	elseif action == 7 and ULib.ucl.query(ply,"ma.settalon") then
+	elseif action == 7 and ULib.ucl.query(ply,"ma.givetalon") then
 		metadmin.settalon(ply,sid,1)
-	elseif action == 8 and ULib.ucl.query(ply,"ma.settalon") then
-		metadmin.settalon(ply,sid,2)
+	elseif action == 8 and ULib.ucl.query(ply,"ma.taketalon") then
+		metadmin.settalon(ply,sid,2,str)
 	end
 end)
 
@@ -314,8 +317,13 @@ net.Receive("metadmin.order", function(len, ply)
 	metadmin.Log(str)
 end)
 
-function metadmin.settalon(ply,sid,type)
+net.Receive("metadmin.report",function(len,ply)
+end)
+
+local talons = {[1]="зеленый",[2]="желтый",[3]="красный"}
+function metadmin.settalon(ply,sid,type,reason)
 	if metadmin.players[sid] then
+		if metadmin.players[sid].status.nom == "Пле" then return end
 		if type == 2 then
 			if metadmin.players[sid].status.nom + 1 <= 3 then
 				metadmin.players[sid].status.nom = metadmin.players[sid].status.nom + 1
@@ -324,6 +332,23 @@ function metadmin.settalon(ply,sid,type)
 				metadmin.Notify(ply,Color(129,207,224),"Вы успешно отобрали талон.")
 				metadmin.Log(ply:Nick().." отобрал талон у игрока "..sid)
 				metadmin.SaveData(sid)
+			elseif metadmin.players[sid].status.nom + 1 > 3 then
+				metadmin.players[sid].status.nom = 1
+				metadmin.players[sid].status.date = os.time()
+				metadmin.players[sid].status.admin = ""
+				local target = player.GetBySteamID(sid)
+				if target then
+					metadmin.setulxrank(target,newgroup)
+				end
+				metadmin.AddExamInfo(sid,"user","CONSOLE",ply:Nick().." ("..ply:SteamID()..") отобрал красный талон.\nУВОЛЕН!",2)
+				metadmin.players[sid].rank = "user"
+				metadmin.SaveData(sid)
+				metadmin.GetExamInfo(sid, function(data)
+					metadmin.players[sid].exam = data
+				end)
+			end
+			if reason then
+				metadmin.violationgive(ply,sid,"Забрал "..talons[metadmin.players[sid].status.nom - 1].." талон.\n"..reason)
 			end
 		else
 			if metadmin.players[sid].status.nom - 1 > 0 then
@@ -336,7 +361,7 @@ function metadmin.settalon(ply,sid,type)
 			end
 		end
 	else
-		metadmin.GetDataSID(sid,function() metadmin.settalon(ply,sid,type) end)
+		metadmin.GetDataSID(sid,function() metadmin.settalon(ply,sid,type,reason) end)
 	end
 end
 
@@ -550,7 +575,7 @@ end)
 function metadmin.sendquestions(call,sid,id)
 	local target = player.GetBySteamID(sid)
 	if target then
-		if target == call then metadmin.Notify(call,Color(129,207,224),"Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
+		--if target == call then metadmin.Notify(call,Color(129,207,224),"Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
 		if target.anstoques then metadmin.Notify(call,Color(129,207,224),"Игрок еще не ответил на предыдущий тест, который выдал "..target.anstoques.nick) return end
 		if not metadmin.questions[id] then return metadmin.Notify(call,Color(129,207,224),"Такого шаблона нет!") end
 		if metadmin.questions[id].enabled == 0 then return metadmin.Notify(call,Color(129,207,224),"Этот шаблон отключен!") end
@@ -652,7 +677,7 @@ end
 
 hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
 	if metadmin.voice then
-		if listener:IsSuperAdmin() or talker:IsSuperAdmin() then return true end
+		if listener:IsAdmin() then return true end
 		if metadmin.players[talker:SteamID()].rank == metadmin.disp then
 			return true
 		end
