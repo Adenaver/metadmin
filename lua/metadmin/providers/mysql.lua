@@ -63,11 +63,33 @@ function metadmin.SaveData(sid)
     q:start()
 end
 
+function metadmin.UpdateNick(ply)
+	local sid = ply:SteamID()
+	if not metadmin.players[sid] then return end
+	local q = db:query("UPDATE `players` SET `Nick` = "..db:escape(ply:Nick()).." WHERE `SID`='"..sid.."'")
+    function q:onError(err, sql)
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            db:connect()
+            db:wait()
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            ErrorNoHalt("Переподключение не удалось.")
+            return
+            end
+        end
+        MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+        q:start()
+    end
+     
+    q:start()
+end
+
 function metadmin.CreateData(sid)
 	local status = "{\"date\":"..os.time()..",\"nom\":1,\"admin\":\"\"}"
 	local group = "user"
+	local Nick = ""
 	local ply = player.GetBySteamID(sid)
 	if ply then
+		Nick = ply:Nick()
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
@@ -83,7 +105,7 @@ function metadmin.CreateData(sid)
 	metadmin.players[sid].violations = {}
 	metadmin.players[sid].exam = {}
 	metadmin.players[sid].exam_answers = {}
-	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`) VALUES ('"..sid.."','"..group.."','"..status.."')")
+	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`,`Nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..Nick.."')")
     function q:onError(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -336,6 +358,26 @@ function metadmin.GetExamInfo(sid,cb)
 end
 function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 	local q = db:query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..rank.."','"..adminsid.."','"..db:escape(note).."','"..type.."','"..db:escape(metadmin.server).."')")
+	q.onError = function(err, sql)
+		if db:status() ~= mysqloo.DATABASE_CONNECTED then
+			db:connect()
+			db:wait()
+			if db:status() ~= mysqloo.DATABASE_CONNECTED then
+				ErrorNoHalt("Переподключение не удалось.")
+				return
+			end
+		end
+		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+		q:start()
+	end
+	q:start()
+end
+
+function metadmin.AllPlayers(group,cb)
+	local q = db:query("SELECT SID,Nick FROM `players` WHERE `group`='"..group.."' ORDER BY id DESC")
+	q.onSuccess = function(self, data)
+		cb(data)
+	end
 	q.onError = function(err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()

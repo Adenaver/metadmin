@@ -107,78 +107,101 @@ function metadmin.menu()
 		end
 	tabs:AddSheet("Онлайн",playerslist)
 	
-	
-	--[[local DPanel = vgui.Create("DPanel",tabs)
-	local ranks = vgui.Create("DListView",DPanel)
-	ranks:SetMultiSelect(false)
-	ranks:SetSize(150,225)
-	ranks:AddColumn("Ранги")
-	for k,v in pairs(metadmin.ranks) do
-		local li = ranks:AddLine(v)
-		li.k = k
-		li.v = v
+	if Access("ma.offmenu") then
+		local DPanel = vgui.Create("DPanel",tabs)
+		local ranks = vgui.Create("DListView",DPanel)
+		ranks:SetMultiSelect(false)
+		ranks:SetSize(150,225)
+		ranks:AddColumn("Ранги")
+		for k,v in pairs(metadmin.ranks) do
+			if k == "user" then continue end
+			local li = ranks:AddLine(v)
+			li.k = k
+			li.v = v
+		end
+		ranks.OnRowSelected = function(self,rowIndex,row)
+			net.Start("metadmin.allplayers")
+				net.WriteString(row.k)
+			net.SendToServer()
+		end
+		
+		metadmin.allplayers = vgui.Create("DListView",DPanel)
+		metadmin.allplayers:SetMultiSelect(false)
+		metadmin.allplayers:SetPos(150,0)
+		metadmin.allplayers:SetSize(634,225)
+		metadmin.allplayers:AddColumn("Ник"):SetFixedWidth(410)
+		metadmin.allplayers:AddColumn("SteamID")
+		local menu
+		metadmin.allplayers.OnClickLine = function(panel,line)
+			if IsValid(menu) then menu:Remove() end
+			line:SetSelected(true)
+			menu = DermaMenu()
+			local header = menu:AddOption(line:GetValue(1))
+			header:SetTextInset(10,0)
+			header.PaintOver = function() surface.SetDrawColor(0,0,0,50) surface.DrawRect(0,0,header:GetWide(),header:GetTall()) end
+			
+			local row = menu:AddOption("Профиль", function()
+				RunConsoleCommand("ulx","prid",line:GetValue(2))
+				tabs:Remove()
+			end)
+			row:SetIcon("icon16/information.png")
+				
+			local row = menu:AddOption("Отмена")
+			row:SetIcon("icon16/cancel.png")
+				
+			menu.Remove = function(m)
+				if IsValid(line) then
+					line:SetSelected(false)
+				end
+		end
+			menu:Open()
+		end
+		tabs:AddSheet("Оффлайн",DPanel)
 	end
-	
-	local playerslist = vgui.Create("DListView",DPanel)
-	playerslist:SetMultiSelect(false)
-	playerslist:SetPos(150,0)
-	playerslist:SetSize(634,225)
-	playerslist:AddColumn("Ник"):SetFixedWidth(410)
-	playerslist:AddColumn("SteamID")
-	tabs:AddSheet("Оффлайн",DPanel)]]
 	
 	
 	if Access("ma.questionsmenu") then
-		local questlist = vgui.Create("DImage",tabs)
+		local questlist = vgui.Create("DImageButton",tabs)
 		questlist:SetPos(748,3)
 		questlist:SetSize(16,16)
 		questlist:SetImage("icon16/table.png")
 		questlist:SetToolTip("Вопросы")
-		questlist:SetMouseInputEnabled(true)
-		function questlist:OnCursorEntered()
-			self:SetCursor("hand")
-		end
-		function questlist:OnCursorExited()
-			self:SetCursor("arrow")
-		end
-		function questlist:OnMouseReleased(code)
+		questlist.DoClick = function()
 			metadmin.questionslist()
 			tabs:Remove()
 		end
 	end
-	local settings = vgui.Create("DImage",tabs)
+	local settings = vgui.Create("DImageButton",tabs)
 	settings:SetPos(764,3)
 	settings:SetSize(16,16)
 	settings:SetImage("icon16/bullet_wrench.png")
 	settings:SetToolTip("Настройки")
-	settings:SetMouseInputEnabled(true)
-	function settings:OnCursorEntered()
-		self:SetCursor("hand")
-	end
-	function settings:OnCursorExited()
-		self:SetCursor("arrow")
-	end
-	function settings:OnMouseReleased()
+	settings.DoClick = function()
 		metadmin.settings()
 		tabs:Remove()
 	end
 	
-	local cls = vgui.Create("DImage",tabs)
+	local cls = vgui.Create("DImageButton",tabs)
 	cls:SetPos(780,3)
 	cls:SetSize(16,16)
 	cls:SetImage("icon16/cross.png")
 	cls:SetToolTip("Закрыть")
-	cls:SetMouseInputEnabled(true)
-	function cls:OnCursorEntered()
-		self:SetCursor("hand")
-	end
-	function cls:OnCursorExited()
-		self:SetCursor("arrow")
-	end
-	function cls:OnMouseReleased()
+	cls.DoClick = function()
 		tabs:Remove()
 	end
+	
+	tabs.OnRemove = function()
+		metadmin.allplayers = nil
+	end
 end
+net.Receive("metadmin.allplayers", function()
+	if metadmin.allplayers then
+		metadmin.allplayers:Clear()
+		for k,v in pairs(net.ReadTable()) do
+			metadmin.allplayers:AddLine(v.nick,v.SID)
+		end
+	end
+end)
 
 local buttons = {["F2"] = KEY_F2,["F3"] = KEY_F3,["F4"] = KEY_F4}
 function metadmin.settings()
@@ -1163,37 +1186,28 @@ function metadmin.profile(tab)
 		Frame:Close()
 	end
 	if tab.synch then
-		local synch = vgui.Create("DImage",Frame)
+		local synch = vgui.Create("DImageButton",Frame)
 		synch:SetPos((report and actions) and 404 or actions and 484 or report and 464 or 544,4)
 		synch:SetSize(16,16)
 		local synched = tab.synch.rank == tab.rank
 		synch:SetImage(synched and "icon16/tick.png" or "icon16/cross.png")
 		synch:SetToolTip(synched and "Синхронизирован" or "Не синхронизирован")
-		synch:SetMouseInputEnabled(true)
 		local com = tab.synch.com and ("\nКомментарий: "..tab.synch.com) or ""
-		function synch:OnCursorEntered()
-			self:SetCursor("hand")
-		end
-		function synch:OnCursorExited()
-			self:SetCursor("arrow")
-		end
-		function synch:OnMouseReleased(code)
-			if (code == MOUSE_LEFT) then
-				if not synched then
-					if Access("ulx setrank") then
-						if metadmin.ranks[tab.synch.rank] then
-							Derma_Query("Текущий ранг: "..tab.rank.."\nРеком. ранг: "..tab.synch.rank..com.."\nСинхронизировать?", "Синхронизация",
-								"Да", function() RunConsoleCommand("ulx","setrankid",tab.SID,tab.synch.rank) Frame:Close() end,
-								"Нет")
-						else
-							Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованный ранг: "..tab.synch.rank..com.."\nСинхронизация невозможна, данный ранг отсутствует в системе.", "Синхронизация","Закрыть")
-						end
+		synch.DoClick = function()
+			if not synched then
+				if Access("ulx setrank") then
+					if metadmin.ranks[tab.synch.rank] then
+						Derma_Query("Текущий ранг: "..tab.rank.."\nРеком. ранг: "..tab.synch.rank..com.."\nСинхронизировать?", "Синхронизация",
+							"Да", function() RunConsoleCommand("ulx","setrankid",tab.SID,tab.synch.rank) Frame:Close() end,
+							"Нет")
 					else
-						Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованный ранг: "..tab.synch.rank..com, "Синхронизация","Закрыть")
+						Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованный ранг: "..tab.synch.rank..com.."\nСинхронизация невозможна, данный ранг отсутствует в системе.", "Синхронизация","Закрыть")
 					end
 				else
-					Derma_Query("Ранг: "..tab.synch.rank..com,"Синхронизация","Закрыть")
+					Derma_Query("Текущий ранг: "..tab.rank.."\nРекомендованный ранг: "..tab.synch.rank..com, "Синхронизация","Закрыть")
 				end
+			else
+				Derma_Query("Ранг: "..tab.synch.rank..com,"Синхронизация","Закрыть")
 			end
 		end
 	end
@@ -1214,23 +1228,15 @@ function metadmin.profile(tab)
 	steamid2:SetToolTip("Копировать")
 	steamid2:SizeToContents()
 	steamid2:SetMouseInputEnabled(true)
+	steamid2.DoClick = function()
+		SetClipboardText(tab.SID)
+	end
 	
 	function steamid2:OnCursorEntered()
 		self:SetCursor("hand")
 	end
 	function steamid2:OnCursorExited()
 		self:SetCursor("arrow")
-	end
-	function steamid2:OnMousePressed(code)
-		if (code == MOUSE_LEFT) then
-			self.wasPressed = CurTime()
-		end
-	end
-	function steamid2:OnMouseReleased()
-		if (self.wasPressed and CurTime()-self.wasPressed <= 0.16) then
-			SetClipboardText(tab.SID)
-		end
-		self.wasPressed = nil
 	end
 	
 	local rank = vgui.Create("DLabel",DPanel)
@@ -1765,19 +1771,12 @@ function metadmin.questions2(id,type,ply)
 		local DPanel2 = vgui.Create("DPanel",Frame)
 		DPanel2:SetPos(718,2)
 		DPanel2:SetSize(37,18)
-		local add = vgui.Create("DImage",DPanel2)
+		local add = vgui.Create("DImageButton",DPanel2)
 		add:SetPos(1,1)
 		add:SetSize(16,16)
 		add:SetImage("icon16/add.png")
 		add:SetToolTip("Добавить")
-		add:SetMouseInputEnabled(true)
-		function add:OnCursorEntered()
-			self:SetCursor("hand")
-		end
-		function add:OnCursorExited()
-			self:SetCursor("arrow")
-		end
-		function add:OnMouseReleased(code)
+		add.DoClick = function()
 			local k = #questions2 + 1
 			Frame:SetSize( 800, math.min(600,80+20*k) )
 			DScrollPanel:SetSize( 790, math.min(540,60+20*k) )
@@ -1789,19 +1788,12 @@ function metadmin.questions2(id,type,ply)
 			questions2[k]:SetText("Новое поле")
 		end
 		
-		local rem = vgui.Create("DImage",DPanel2)
+		local rem = vgui.Create("DImageButton",DPanel2)
 		rem:SetPos(20,1)
 		rem:SetSize(16,16)
 		rem:SetImage("icon16/delete.png")
 		rem:SetToolTip("Удалить")
-		rem:SetMouseInputEnabled(true)
-		function rem:OnCursorEntered()
-			self:SetCursor("hand")
-		end
-		function rem:OnCursorExited()
-			self:SetCursor("arrow")
-		end
-		function rem:OnMouseReleased(code)
+		rem.DoClick = function()
 			local k = #questions2 -1
 			if IsValid(questions2[k+1]) then
 				Frame:SetSize( 800, math.min(600,80+20*k) )
@@ -1840,3 +1832,66 @@ function metadmin.questions2(id,type,ply)
 		end
 	end
 end
+
+
+metadmin.docs = {
+	{mat = "materials/metadmin/docs/1.png",name = "Приказ #146",pix = {334,682},
+		labels = {
+			{pos = {15,59},size = 20,font = "ma.font1",text = function() return os.date("%d",os.time()) end},
+			{pos = {50,59},size = 60,font = "ma.font1",text = function() return os.date("%b",os.time()) end},
+			{pos = {190,59},size = 20,font = "ma.font1",text = function() return os.date("%H",os.time()) end},
+			{pos = {240,59},size = 20,font = "ma.font1",text = function() return os.date("%M",os.time()) end},
+			{pos = {156,59},size = 10,font = "ma.font1",text = function() return string.sub(os.date("%y",os.time()),2) end},
+			
+			{pos = {65,150},size = 265,font = "ma.font1",text = function() return "Тружеников Гаррис мода,VHE,Им.Уоллеса Брина" end},
+			{pos = {5,170},size = 325,font = "ma.font1",text = function() return "Тружеников Гаррис мода,VHE,Им.Уоллеса Брина" end},
+			{pos = {5,190},size = 325,font = "ma.font1",text = function() return "Тружеников Гаррис мода,VHE,Им.Уоллеса Брина" end},
+			
+			{pos = {5,230},size = 130,font = "ma.font1",text = function() return "I, II, 3, 4" end},
+		}
+	},
+	
+	{mat = "materials/metadmin/docs/2.png",name = "Поездной талон",pix = {334,705},
+		labels = {
+			--{pos = {156,59},size = 10,font = "ma.font1",text = function() return string.sub(os.date("%y",os.time()),2) end}
+		}
+	}
+}
+
+concommand.Add("docs",function(ply,com,arg)
+	local doc = metadmin.docs[tonumber(arg[1])]
+	if not doc then return end
+	local DPanel = vgui.Create("DPanel")
+	DPanel:SetSize(doc.pix[1],doc.pix[2])
+	DPanel:Center()
+	DPanel:MakePopup()
+	DPanel.Paint = function(self,w,h)
+		surface.SetMaterial(Material(doc.mat))
+		surface.SetDrawColor(255,255,255,255)
+		surface.DrawTexturedRect(0,0,doc.pix[1],doc.pix[2])
+	end
+	
+	local DImageButton = vgui.Create("DImageButton",DPanel)
+	DImageButton:SetPos(doc.pix[1]-19,3)
+	DImageButton:SetSize(16,16)
+	DImageButton:SetImage("icon16/cross.png")
+	DImageButton.DoClick = function()
+		DPanel:Remove()
+	end
+	DLabel:SetDark(1)
+	local labels = {}
+	for k2,v2 in pairs(doc.labels) do
+		if v2.editable then
+			labels[k2] = vgui.Create("DLabelEditable",DPanel)
+		else
+			labels[k2] = vgui.Create("DLabel",DPanel)
+		end
+		
+		labels[k2]:SetPos(v2.pos[1],v2.pos[2])
+		labels[k2]:SetSize(v2.size,20)
+			labels[k2]:SetText(v2.text())
+		if v2.font then
+			labels[k2]:SetFont(v2.font)
+		end
+	end
+end)

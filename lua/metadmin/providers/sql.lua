@@ -30,7 +30,8 @@ local function Start()
 		`id` INTEGER PRIMARY KEY AUTOINCREMENT,
 		`SID` text NOT NULL,
 		`group` text NOT NULL,
-		`status` text NOT NULL
+		`status` text NOT NULL,
+		`Nick` text NOT NULL DEFAULT ''
 		)]])
 	end
 	if not sql.TableExists("questions") then
@@ -56,6 +57,7 @@ Start()
 
 function metadmin.FIX()
 	sql.Query("ALTER TABLE answers ADD COLUMN ssadmin text NOT NULL DEFAULT ''")
+	sql.Query("ALTER TABLE players ADD COLUMN Nick text NOT NULL DEFAULT ''")
 end
 function metadmin.GetData(sid,cb)
     local result = sql.Query("SELECT * FROM players WHERE SID='"..sid.."'")
@@ -69,20 +71,29 @@ function metadmin.SaveData(sid)
 	sql.Query("UPDATE `players` SET `group` = '"..rank.."',`status` = '"..status.."' WHERE `SID`="..sql.SQLStr(sid))
 end
 
+function metadmin.UpdateNick(ply)
+	local sid = ply:SteamID()
+	if not metadmin.players[sid] then return end
+	sql.Query("UPDATE `players` SET `Nick` = "..sql.SQLStr(ply:Nick()).." WHERE `SID`='"..sid.."'")
+end
+
 function metadmin.CreateData(sid)
 	local status = "{\"date\":"..os.time()..",\"nom\":1,\"admin\":\"\"}"
 	local group = "user"
+	local Nick = ""
 	local ply = player.GetBySteamID(sid)
 	if ply then
+		Nick = ply:Nick()
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
 			metadmin.setulxrank(ply,group)
 		end
 	end
-	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."')")
+	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`,`Nick`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."','"..Nick.."')")
 	metadmin.players[sid] = {}
 	metadmin.players[sid].rank = group
+	metadmin.players[sid].Nick = Nick
 	metadmin.players[sid].status = {}
 	metadmin.players[sid].status.nom = 1
 	metadmin.players[sid].status.admin = ""
@@ -163,4 +174,10 @@ function metadmin.GetExamInfo(sid,cb)
 end
 function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 	sql.Query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..sid.."','"..os.time().."','"..rank.."','"..adminsid.."',"..sql.SQLStr(note)..",'"..type.."','"..metadmin.server.."')")
+end
+
+function metadmin.AllPlayers(group,cb)
+	local result = sql.Query("SELECT SID,Nick FROM `players` WHERE `group`='"..group.."' ORDER BY id DESC")
+	if not result then result = {} end
+	cb(result)
 end

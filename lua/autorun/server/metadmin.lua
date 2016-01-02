@@ -2,7 +2,7 @@ metadmin = metadmin or {}
 metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
 metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX"
-metadmin.version = "28/12/2015"
+metadmin.version = "02/01/2016"
 
 if metadmin.provider == "mysql" then
 	metadmin.mysql.host = "localhost" -- Хост
@@ -114,6 +114,7 @@ util.AddNetworkString("metadmin.notify")
 util.AddNetworkString("metadmin.order")
 util.AddNetworkString("metadmin.settings")
 util.AddNetworkString("metadmin.report")
+util.AddNetworkString("metadmin.allplayers")
 
 for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
@@ -122,6 +123,7 @@ end
 metadmin.questions = metadmin.questions or {}
 hook.Add("InitPostEntity","MetAdminInit",function()
 	ULib.ucl.registerAccess("ma.pl", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню с игроками.",metadmin.category)
+	ULib.ucl.registerAccess("ma.offmenu", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню с оффлайн игроками.",metadmin.category)
 	ULib.ucl.registerAccess("ma.questionsmenu", ULib.ACCESS_SUPERADMIN, "Возможность открывать меню вопросов.",metadmin.category)
 	for k, v in pairs(metadmin.prom) do
 		ULib.ucl.registerAccess("ma.prom"..v, ULib.ACCESS_SUPERADMIN, "Доступ к выдаче ранга '"..metadmin.ranks[v]..".",metadmin.category)
@@ -225,6 +227,11 @@ hook.Add("PlayerInitialSpawn", "metadmin", function(ply)
 	end
 end)
 
+hook.Add(ULib.HOOK_PLAYER_NAME_CHANGED,"metadmin",function(ply,LastNick,Nick)
+	metadmin.UpdateNick(ply)
+	metadmin.players[ply:SteamID()].Nick = Nick
+end)
+
 function refreshquestions()
 	metadmin.GetQuestions(
 		function(data)
@@ -318,6 +325,24 @@ net.Receive("metadmin.order", function(len, ply)
 end)
 
 net.Receive("metadmin.report",function(len,ply)
+end)
+
+net.Receive("metadmin.allplayers", function(len, ply)
+	if not ULib.ucl.query(ply,"ma.pl") or not ULib.ucl.query(ply,"ma.offmenu") then return end
+	local group = net.ReadString()
+	if not metadmin.ranks[group] then return end
+	if group == "user" then return end
+	metadmin.AllPlayers(group,function(cb)
+		local tab = {}
+		for k,v in pairs(cb) do
+			tab[k] = {}
+			tab[k].nick = v.Nick
+			tab[k].SID = v.SID
+		end
+		net.Start("metadmin.allplayers")
+			net.WriteTable(tab)
+		net.Send(ply)
+	end)
 end)
 
 local talons = {[1]="зеленый",[2]="желтый",[3]="красный"}
@@ -437,7 +462,7 @@ function metadmin.profile(call,sid)
 		end
 		tab.rank = metadmin.players[sid].rank
 		tab.SID = sid
-		tab.Nick = GetNick(sid,"UNKNOWN")
+		tab.Nick = metadmin.players[sid].Nick
 		tab.nvio = #metadmin.players[sid].violations
 		tab.badpl = metadmin.players[sid].badpl
 		tab.synch = metadmin.players[sid].synch
@@ -643,6 +668,7 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 		if data and data[1] then
 			metadmin.players[sid] = {}
 			metadmin.players[sid].rank = data[1].group
+			metadmin.players[sid].Nick = data[1].Nick
 			metadmin.players[sid].status = util.JSONToTable(data[1].status)
 			if badpl then
 				http.Fetch("http://metrostroi.net/metadmin/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
@@ -652,6 +678,10 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 			end
 			local target = player.GetBySteamID(sid)
 			if target then
+				if target:Nick() != data[1].Nick then
+					metadmin.UpdateNick(target)
+					metadmin.players[sid].Nick = target:Nick()
+				end
 				if target:GetUserGroup() != data[1].group then
 					metadmin.setulxrank(target,data[1].group)
 				end

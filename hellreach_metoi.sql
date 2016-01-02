@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS `players` (
   `id` int(11) NOT NULL,
   `SID` text NOT NULL,
   `group` text NOT NULL,
-  `status` text NOT NULL
+  `status` text NOT NULL,
+  `Nick` text NOT NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
