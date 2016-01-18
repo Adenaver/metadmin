@@ -580,9 +580,9 @@ function metadmin.promotion(call,sid,note)
 	end
 end
 function metadmin.demotion(call,sid,note)
-	if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+	if not ULib.ucl.query(call,"ma.demote") then return end
 	if metadmin.players[sid] then
-		if metadmin.players[sid].synch then return end
+		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.dem[group]
 		if not newgroup then return end
