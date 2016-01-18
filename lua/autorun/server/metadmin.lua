@@ -2,7 +2,7 @@ metadmin = metadmin or {}
 metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
 metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX"
-metadmin.version = "02/01/2016"
+metadmin.version = "18/01/2016"
 
 if metadmin.provider == "mysql" then
 	metadmin.mysql.host = "localhost" -- Хост
@@ -98,7 +98,7 @@ local function start()
 			end
 		end
 	end
-	http.Fetch("http://metrostroi.net/metadmin/version",function(body,len,headers,code) if metadmin.version != body then metadmin.notifver = body end end)
+	http.Fetch("http://metrostroi.net/api/metadmin_version",function(body,len,headers,code) if metadmin.version != body then metadmin.notifver = body end end)
 end
 start()
 
@@ -115,6 +115,7 @@ util.AddNetworkString("metadmin.order")
 util.AddNetworkString("metadmin.settings")
 util.AddNetworkString("metadmin.report")
 util.AddNetworkString("metadmin.allplayers")
+util.AddNetworkString("metadmin.synch")
 
 for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
@@ -147,6 +148,8 @@ hook.Add("InitPostEntity","MetAdminInit",function()
 	ULib.ucl.registerAccess("ma.forcesetstattest", ULib.ACCESS_SUPERADMIN, "Установка статуса теста.(Без проверки)",metadmin.category)
 	ULib.ucl.registerAccess("ma.order", ULib.ACCESS_SUPERADMIN, "Доступ к приказам.",metadmin.category)
 	ULib.ucl.registerAccess("ma.settings", ULib.ACCESS_SUPERADMIN, "Доступ к настройкам.",metadmin.category)
+	ULib.ucl.registerAccess("ma.synch", ULib.ACCESS_SUPERADMIN, "Включение/выключение синхронизации игрока с сайтом.",metadmin.category)
+	ULib.ucl.registerAccess("ma.refsynch", ULib.ACCESS_SUPERADMIN, "Обновить данные игрока с сайта.",metadmin.category)
 	timer.Simple(2.5, function()
 		metadmin.GetQuestions(
 			function(data)
@@ -185,6 +188,7 @@ hook.Add('MetrostroiPlombBroken', 'MetAdmin', function(train,but,drv)
 		metadmin.Notify(false,Color(129,207,224),str)
 		metadmin.Log(str)
 		metadmin.AddViolation(ply:SteamID(),nil,"Cорвал пломбу с "..but.." без разрешения диспетчера.")
+		if metadmin.players[ply:SteamID()].synch then return end
 		metadmin.GetViolations(ply:SteamID(), function(data)
 			metadmin.players[ply:SteamID()].violations = data
 		end)
@@ -262,6 +266,7 @@ local status = {[0]="На проверке","Сдал","Не сдал"}
 net.Receive("metadmin.action", function(len,ply)
 	if not ULib.ucl.query(ply,"ma.pl") then return end
 	local sid = net.ReadString()
+	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	local action = net.ReadInt(5)
 	local str = net.ReadString()
 	if action == 1 and ULib.ucl.query(ply,"ma.promote") then
@@ -345,9 +350,24 @@ net.Receive("metadmin.allplayers", function(len, ply)
 	end)
 end)
 
+net.Receive("metadmin.synch", function(len, ply)
+	local ref = net.ReadBool()
+	local sid = net.ReadString()
+	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") or not metadmin.players[sid] then return end
+	if not ref then
+		metadmin.OnOffSynch(sid,metadmin.players[sid].synch and 0 or 1)
+		metadmin.GetDataSID(sid)
+	elseif ref and metadmin.players[sid].synch then
+		metadmin.GetDataSID(sid)
+		metadmin.Notify(ply,Color(129,207,224),"Данные обновлены")
+	end
+end)
+
+
 local talons = {[1]="зеленый",[2]="желтый",[3]="красный"}
 function metadmin.settalon(ply,sid,type,reason)
 	if metadmin.players[sid] then
+		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 		if metadmin.players[sid].status.nom == "Пле" then return end
 		if type == 2 then
 			if metadmin.players[sid].status.nom + 1 <= 3 then
@@ -403,6 +423,7 @@ net.Receive("metadmin.violations",function(len,ply)
 end)
 
 function metadmin.violationgive(call,sid,str)
+	if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 	metadmin.AddViolation(sid,call:SteamID(),str)
 	call:ChatPrint("Нарушение добавлено.")
 	metadmin.GetViolations(sid, function(data)
@@ -411,6 +432,7 @@ function metadmin.violationgive(call,sid,str)
 end
 
 function metadmin.violationremove(call,sid,id)
+	if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 	id = tonumber(id)
 	if IsValid(call) then
 		metadmin.Notify(call,Color(129,207,224),"Нарушение удалено.")
@@ -433,18 +455,23 @@ function metadmin.profile(call,sid)
 	end
 	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	if metadmin.players[sid] then
+		if metadmin.players[sid].nodata then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом. Но что-то пошло не так!") return end
 		local tab = {}
 		local target = player.GetBySteamID(sid)
 		if target == call or ULib.ucl.query(call,"ma.viewviolations") then
 			tab.violations = metadmin.players[sid].violations
-			for k,v in pairs(tab.violations) do
-				tab.violations[k].admin = GetNick(v.admin,v.admin)
+			if not metadmin.players[sid].synch then
+				for k,v in pairs(tab.violations) do
+					tab.violations[k].admin = GetNick(v.admin,v.admin)
+				end
 			end
 		end
 		if target == call or ULib.ucl.query(call,"ma.examinfo") then
 			tab.exam = metadmin.players[sid].exam
-			for k,v in pairs(tab.exam) do
-				tab.exam[k].examiner = GetNick(v.examiner,v.examiner)
+			if not metadmin.players[sid].synch then
+				for k,v in pairs(tab.exam) do
+					tab.exam[k].examiner = GetNick(v.examiner,v.examiner)
+				end
 			end
 		end
 		if target == call or ULib.ucl.query(call,"ma.viewtalon") then
@@ -463,6 +490,9 @@ function metadmin.profile(call,sid)
 		tab.rank = metadmin.players[sid].rank
 		tab.SID = sid
 		tab.Nick = metadmin.players[sid].Nick
+		if tab.Nick == "" then
+			tab.Nick = GetNick(sid,"")
+		end
 		tab.nvio = #metadmin.players[sid].violations
 		tab.badpl = metadmin.players[sid].badpl
 		tab.synch = metadmin.players[sid].synch
@@ -480,6 +510,7 @@ function metadmin.setulxrank(ply,rank)
 	if not id then id = ply:SteamID() end
 	ULib.ucl.addUser(id,userInfo.allow,userInfo.deny,rank)
 	--ply:SetUserGroup(rank)
+	metadmin.SendSettings(ply)
 end
 
 function metadmin.setrank(call,sid,rank)
@@ -494,6 +525,7 @@ function metadmin.setrank(call,sid,rank)
 	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	if metadmin.players[sid] then
 		if metadmin.ranks[rank] then
+			if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 			if metadmin.players[sid].rank == rank then metadmin.Notify(call,Color(129,207,224),"Что ты пытаешься сделать? Ранги идентичны!") return end
 			metadmin.players[sid].rank = rank
 			metadmin.SaveData(sid)
@@ -524,6 +556,7 @@ end
 function metadmin.promotion(call,sid,note)
 	if not ULib.ucl.query(call,"ma.promote") then return end
 	if metadmin.players[sid] then
+		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.prom[group]
 		if not newgroup then return end
@@ -547,8 +580,9 @@ function metadmin.promotion(call,sid,note)
 	end
 end
 function metadmin.demotion(call,sid,note)
-	if not ULib.ucl.query(call,"ma.demote") then return end
+	if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 	if metadmin.players[sid] then
+		if metadmin.players[sid].synch then return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.dem[group]
 		if not newgroup then return end
@@ -600,7 +634,7 @@ end)
 function metadmin.sendquestions(call,sid,id)
 	local target = player.GetBySteamID(sid)
 	if target then
-		--if target == call then metadmin.Notify(call,Color(129,207,224),"Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
+		if target == call then metadmin.Notify(call,Color(129,207,224),"Зачем ты пытался отправить тест сам себе? Фу! Фу! Фу!") return end
 		if target.anstoques then metadmin.Notify(call,Color(129,207,224),"Игрок еще не ответил на предыдущий тест, который выдал "..target.anstoques.nick) return end
 		if not metadmin.questions[id] then return metadmin.Notify(call,Color(129,207,224),"Такого шаблона нет!") end
 		if metadmin.questions[id].enabled == 0 then return metadmin.Notify(call,Color(129,207,224),"Этот шаблон отключен!") end
@@ -662,39 +696,80 @@ end )
 
 
 local badpl = true
-local synch = true
 function metadmin.GetDataSID(sid,cb,nocreate)
+	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	metadmin.GetData(sid, function(data)
 		if data and data[1] then
-			metadmin.players[sid] = {}
-			metadmin.players[sid].rank = data[1].group
-			metadmin.players[sid].Nick = data[1].Nick
-			metadmin.players[sid].status = util.JSONToTable(data[1].status)
-			if badpl then
-				http.Fetch("http://metrostroi.net/metadmin/badpl.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
-			end
-			if synch then
-				http.Fetch("http://metrostroi.net/metadmin/getrank.php?sid="..sid,function(body,len,headers,code) metadmin.players[sid].synch = body != "" and util.JSONToTable(body) or false end)
-			end
-			local target = player.GetBySteamID(sid)
-			if target then
-				if target:Nick() != data[1].Nick then
-					metadmin.UpdateNick(target)
-					metadmin.players[sid].Nick = target:Nick()
+			if tonumber(data[1].synch) == 1 then
+				metadmin.players[sid] = {exam = {},exam_answers = {},violations = {},status = {date=0,admin="",nom=1},rank = "user",Nick = "",synch = true,nodata = true}
+				http.Fetch("http://metrostroi.net/api/user/"..sid,function(body,len,headers,code)
+					if body == "" then
+						metadmin.Log("Синхронизация "..sid.." с сайтом невозможна!| Данного игрока на сайте нет!")
+						metadmin.OnOffSynch(sid,0)
+						metadmin.GetDataSID(sid,cb)
+						return
+					end
+					metadmin.players[sid] = util.JSONToTable(body)
+					if not metadmin.ranks[metadmin.players[sid].rank] then
+						metadmin.Log("Синхронизация "..sid.." с сайтом невозможна!| Ранг "..metadmin.players[sid].rank.." не существует!")
+						metadmin.OnOffSynch(sid,0)
+						metadmin.GetDataSID(sid,cb)
+						return
+					end
+					if metadmin.players[sid].badpl == "" then
+						metadmin.players[sid].badpl = false
+					end
+					if metadmin.players[sid].Nick == "" then
+						metadmin.players[sid].Nick = data[1].Nick
+					end
+					if data[1].synchgroup != metadmin.players[sid].rank then
+						metadmin.SetSynchGroup(sid,metadmin.players[sid].rank)
+					end
+					metadmin.players[sid].synch = true
+					metadmin.GetTests(sid, function(data)
+						metadmin.players[sid].exam_answers = data
+					end)
+					local target = player.GetBySteamID(sid)
+					if target then
+						if target:Nick() != metadmin.players[sid].Nick then
+							if not metadmin.players[sid].synch then
+								metadmin.UpdateNick(target)
+							end
+							metadmin.players[sid].Nick = target:Nick()
+						end
+						if target:GetUserGroup() != metadmin.players[sid].rank then
+							metadmin.setulxrank(target,metadmin.players[sid].rank)
+						end
+					end
+				end)
+			else
+				metadmin.players[sid] = {}
+				metadmin.players[sid].rank = data[1].group
+				metadmin.players[sid].Nick = data[1].Nick
+				metadmin.players[sid].status = util.JSONToTable(data[1].status)
+				metadmin.GetViolations(sid, function(data)
+					metadmin.players[sid].violations = data
+				end)
+				metadmin.GetExamInfo(sid, function(data)
+					metadmin.players[sid].exam = data
+				end)
+				metadmin.GetTests(sid, function(data)
+					metadmin.players[sid].exam_answers = data
+				end)
+				local target = player.GetBySteamID(sid)
+				if target then
+					if target:Nick() != metadmin.players[sid].Nick then
+						if not metadmin.players[sid].synch then
+							metadmin.UpdateNick(target)
+						end
+						metadmin.players[sid].Nick = target:Nick()
+					end
+					if target:GetUserGroup() != metadmin.players[sid].rank then
+						metadmin.setulxrank(target,metadmin.players[sid].rank)
+					end
 				end
-				if target:GetUserGroup() != data[1].group then
-					metadmin.setulxrank(target,data[1].group)
-				end
+				http.Fetch("http://metrostroi.net/api/bad/"..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
 			end
-			metadmin.GetViolations(sid, function(data)
-				metadmin.players[sid].violations = data
-			end)
-			metadmin.GetExamInfo(sid, function(data)
-				metadmin.players[sid].exam = data
-			end)
-			metadmin.GetTests(sid, function(data)
-				metadmin.players[sid].exam_answers = data
-			end)
 			if cb then
 				timer.Simple(0.25,function() cb() end)
 			end

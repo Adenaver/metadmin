@@ -83,6 +83,44 @@ function metadmin.UpdateNick(ply)
     q:start()
 end
 
+function metadmin.OnOffSynch(sid,on)
+	if not metadmin.players[sid] or not isnumber(on) then return end
+	local q = db:query("UPDATE `players` SET `synch` = "..on.." WHERE `SID`='"..sid.."'")
+    function q:onError(err, sql)
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            db:connect()
+            db:wait()
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            ErrorNoHalt("Переподключение не удалось.")
+            return
+            end
+        end
+        MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+        q:start()
+    end
+     
+    q:start()
+end
+
+
+function metadmin.SetSynchGroup(sid,rank)
+	local q = db:query("UPDATE `players` SET `synchgroup` = "..db:escape(rank).." WHERE `SID`='"..sid.."'")
+    function q:onError(err, sql)
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            db:connect()
+            db:wait()
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            ErrorNoHalt("Переподключение не удалось.")
+            return
+            end
+        end
+        MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+        q:start()
+    end
+     
+    q:start()
+end
+
 function metadmin.CreateData(sid)
 	local status = "{\"date\":"..os.time()..",\"nom\":1,\"admin\":\"\"}"
 	local group = "user"
@@ -374,7 +412,7 @@ function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 end
 
 function metadmin.AllPlayers(group,cb)
-	local q = db:query("SELECT SID,Nick FROM `players` WHERE `group`='"..group.."' ORDER BY id DESC")
+	local q = db:query("SELECT SID,Nick FROM `players` WHERE `synchgroup`='"..group.."' OR (`group`='"..group.."' AND `synchgroup`='') ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
 	end

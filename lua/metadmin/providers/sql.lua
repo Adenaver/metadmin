@@ -31,7 +31,9 @@ local function Start()
 		`SID` text NOT NULL,
 		`group` text NOT NULL,
 		`status` text NOT NULL,
-		`Nick` text NOT NULL DEFAULT ''
+		`Nick` text NOT NULL DEFAULT '',
+		`synch` text NOT NULL DEFAULT '',
+		`synchgroup` text NOT NULL DEFAULT ''
 		)]])
 	end
 	if not sql.TableExists("questions") then
@@ -58,6 +60,8 @@ Start()
 function metadmin.FIX()
 	sql.Query("ALTER TABLE answers ADD COLUMN ssadmin text NOT NULL DEFAULT ''")
 	sql.Query("ALTER TABLE players ADD COLUMN Nick text NOT NULL DEFAULT ''")
+	sql.Query("ALTER TABLE players ADD COLUMN synch text NOT NULL DEFAULT ''")
+	sql.Query("ALTER TABLE players ADD COLUMN synchgroup text NOT NULL DEFAULT ''")
 end
 function metadmin.GetData(sid,cb)
     local result = sql.Query("SELECT * FROM players WHERE SID='"..sid.."'")
@@ -75,6 +79,15 @@ function metadmin.UpdateNick(ply)
 	local sid = ply:SteamID()
 	if not metadmin.players[sid] then return end
 	sql.Query("UPDATE `players` SET `Nick` = "..sql.SQLStr(ply:Nick()).." WHERE `SID`='"..sid.."'")
+end
+
+function metadmin.OnOffSynch(sid,on)
+	if not metadmin.players[sid] or not isnumber(on) then return end
+	sql.Query("UPDATE `players` SET `synch` = "..on..",`synchgroup` = '' WHERE `SID`='"..sid.."'")
+end
+
+function metadmin.SetSynchGroup(sid,rank)
+	sql.Query("UPDATE `players` SET `synchgroup` = "..sql.SQLStr(rank).." WHERE `SID`='"..sid.."'")
 end
 
 function metadmin.CreateData(sid)
@@ -177,7 +190,7 @@ function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 end
 
 function metadmin.AllPlayers(group,cb)
-	local result = sql.Query("SELECT SID,Nick FROM `players` WHERE `group`='"..group.."' ORDER BY id DESC")
+	local result = sql.Query("SELECT SID,Nick FROM `players` WHERE `synchgroup`='"..group.."' OR (`group`='"..group.."' AND `synchgroup`='') ORDER BY id DESC")
 	if not result then result = {} end
 	cb(result)
 end
