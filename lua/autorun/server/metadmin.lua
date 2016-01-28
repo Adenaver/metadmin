@@ -1,8 +1,8 @@
 metadmin = metadmin or {}
 metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
-metadmin.key = "YgBejmtYdeVPaGSKO5TEoiRlKN7pmTdb1Ef0SAYX"
-metadmin.version = "18/01/2016"
+metadmin.api_key = ""
+metadmin.version = "28/01/2016"
 
 if metadmin.provider == "mysql" then
 	metadmin.mysql.host = "localhost" -- Хост
@@ -19,11 +19,11 @@ if not file.Exists(path, "LUA") then
 end
 include(path)
 metadmin.senduser = {"ranks","prom","dem","plombs","pogona"}
-metadmin.sendadm = {"server","groupwrite","disp","showserver","voice"}
+metadmin.sendadm = {"server","groupwrite","disps","showserver","voice"}
 
 metadmin.defserver = "SERVER"
 metadmin.defgroupwrite = false 
-metadmin.defdisp = "admin"
+metadmin.defdisps = {["traindispather"]=true}
 metadmin.defshowserver = false
 metadmin.defranks = {
 	["driver3class"] = "Машинист 3 класса",
@@ -31,10 +31,11 @@ metadmin.defranks = {
 	["driver1class"] = "Машинист 1 класса",
 	["user"] = "Помощник машиниста",
 	["auditor"] = "Ревизор",
-	["admin"] = "Поездной диспетчер",
+	["traindispather"] = "Поездной диспетчер",
 	["chiefinstructor"] = "Главный инструктор",
 	["instructor"] = "Машинист инструктор",
-	["superadmin"] = "Начальник метрополитена"
+	["superadmin"] = "Начальник метрополитена",
+	["developer"] = "Разработчик"
 }
 metadmin.defprom = {
 	["user"] = "driver3class",
@@ -62,12 +63,16 @@ local function start()
 	end
 	if not file.Exists("metadmin/version.txt","DATA") then
 		file.Write("metadmin/version.txt",metadmin.version)
-		metadmin.FIX()
+		if metadmin.sqlfix then
+			metadmin.sqlfix()
+		end
 	else
 		local version = file.Read("metadmin/version.txt","DATA")
 		if version != metadmin.version then
 			file.Write("metadmin/version.txt",metadmin.version)
-			metadmin.FIX()
+			if metadmin.sqlfix then
+				metadmin.sqlfix()
+			end
 		end
 	end
 	if not file.Exists("metadmin/settings.txt","DATA") then
@@ -116,6 +121,7 @@ util.AddNetworkString("metadmin.settings")
 util.AddNetworkString("metadmin.report")
 util.AddNetworkString("metadmin.allplayers")
 util.AddNetworkString("metadmin.synch")
+util.AddNetworkString("metadmin.trserver")
 
 for k,v in pairs(metadmin.pogona) do
 	resource.AddFile(v)
@@ -364,7 +370,7 @@ net.Receive("metadmin.synch", function(len, ply)
 end)
 
 
-local talons = {[1]="зеленый",[2]="желтый",[3]="красный"}
+local talons = {[1]="зеленый",[2]="желтый",[0]="красный"}
 function metadmin.settalon(ply,sid,type,reason)
 	if metadmin.players[sid] then
 		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
@@ -496,6 +502,7 @@ function metadmin.profile(call,sid)
 		tab.nvio = #metadmin.players[sid].violations
 		tab.badpl = metadmin.players[sid].badpl
 		tab.synch = metadmin.players[sid].synch
+		tab.icon = metadmin.players[sid].icon
 		net.Start("metadmin.profile")
 			net.WriteTable(tab)
 		net.Send(call)
@@ -524,7 +531,7 @@ function metadmin.setrank(call,sid,rank)
 	end
 	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
 	if metadmin.players[sid] then
-		if metadmin.ranks[rank] then
+		if metadmin.ranks[rank] and ULib.ucl.groups[rank] then
 			if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 			if metadmin.players[sid].rank == rank then metadmin.Notify(call,Color(129,207,224),"Что ты пытаешься сделать? Ранги идентичны!") return end
 			metadmin.players[sid].rank = rank
@@ -559,7 +566,7 @@ function metadmin.promotion(call,sid,note)
 		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.prom[group]
-		if not newgroup then return end
+		if not newgroup and not ULib.ucl.groups[newgroup] then return end
 		if not ULib.ucl.query(call,"ma.prom"..newgroup) then return end
 		local target = player.GetBySteamID(sid)
 		if target then
@@ -585,7 +592,7 @@ function metadmin.demotion(call,sid,note)
 		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.dem[group]
-		if not newgroup then return end
+		if not newgroup and not ULib.ucl.groups[newgroup] then return end
 		local target = player.GetBySteamID(sid)
 		if target then
 			metadmin.setulxrank(target,newgroup)
@@ -645,6 +652,7 @@ function metadmin.sendquestions(call,sid,id)
 		target.anstoques.nick = call:Nick()
 		target.anstoques.adminsid = call:SteamID()
 		target.anstoques.idquestions = id
+		target.anstoques.time = os.time()
 		local str = call:Nick().." отправил тест ("..metadmin.questions[id].name..") игроку "..target:Nick()
 		metadmin.Notify(false,Color(129,207,224),str)
 		metadmin.Log(str)
@@ -674,7 +682,7 @@ net.Receive("metadmin.answers", function(len, ply)
 	if not ply.anstoques then return end
 	local ans = net.ReadTable()
 	if metadmin.questions[ply.anstoques.idquestions].enabled == 0 then return end
-	local str = "Игрок "..ply:Nick().." ответил на вопросы теста. Его результат записан и вскоре будет проверен."
+	local str = "Игрок "..ply:Nick().." ответил на вопросы теста за "..string.ToMinutesSeconds(os.time()-ply.anstoques.time).." минут. Его результат записан и вскоре будет проверен."
 	metadmin.Notify(false,Color(129,207,224),str)
 	metadmin.Log(str)
 	metadmin.AddTest(ply:SteamID(),ply.anstoques.idquestions,util.TableToJSON(ans),ply.anstoques.adminsid)
@@ -687,7 +695,7 @@ end)
 hook.Add("PlayerSay", "XER", function(ply,text)
 	if string.find(text,"Диспетчер",1) then
 		for k,v in pairs(player.GetAll()) do
-			if v:GetUserGroup() == metadmin.disp then
+			if metadmin.disps[v:GetUserGroup()] then
 				v:PrintMessage(HUD_PRINTCENTER,'Вас вызывают!')
 			end
 		end
@@ -710,7 +718,7 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 						return
 					end
 					metadmin.players[sid] = util.JSONToTable(body)
-					if not metadmin.ranks[metadmin.players[sid].rank] then
+					if not metadmin.ranks[metadmin.players[sid].rank] or not ULib.ucl.groups[metadmin.players[sid].rank] then
 						metadmin.Log("Синхронизация "..sid.." с сайтом невозможна!| Ранг "..metadmin.players[sid].rank.." не существует!")
 						metadmin.OnOffSynch(sid,0)
 						metadmin.GetDataSID(sid,cb)
@@ -744,7 +752,12 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 				end)
 			else
 				metadmin.players[sid] = {}
-				metadmin.players[sid].rank = data[1].group
+				if metadmin.ranks[data[1].group] and ULib.ucl.groups[data[1].group] then
+					metadmin.players[sid].rank = data[1].group
+				else
+					metadmin.players[sid].rank = "user"
+					metadmin.Log("Невозможно выдать ранг игроку "..sid.." | Такого ранга не существует!")
+				end
 				metadmin.players[sid].Nick = data[1].Nick
 				metadmin.players[sid].status = util.JSONToTable(data[1].status)
 				metadmin.GetViolations(sid, function(data)
@@ -769,6 +782,7 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 					end
 				end
 				http.Fetch("http://metrostroi.net/api/bad/"..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
+				http.Fetch("http://metrostroi.net/api/icon/"..sid,function(body,len,headers,code) metadmin.players[sid].icon = tonumber(body) != "" and body or false end)
 			end
 			if cb then
 				timer.Simple(0.25,function() cb() end)
@@ -783,10 +797,10 @@ end
 hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
 	if metadmin.voice then
 		if listener:IsAdmin() then return true end
-		if metadmin.players[talker:SteamID()].rank == metadmin.disp then
+		if metadmin.disps[metadmin.players[talker:SteamID()].rank] then
 			return true
 		end
-		if metadmin.players[listener:SteamID()].rank == metadmin.disp then
+		if metadmin.disps[metadmin.players[listener:SteamID()].rank] then
 			return true
 		end
 		return false

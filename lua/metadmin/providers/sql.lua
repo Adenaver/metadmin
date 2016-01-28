@@ -57,7 +57,7 @@ local function Start()
 end
 Start()
 
-function metadmin.FIX()
+function metadmin.sqlfix()
 	sql.Query("ALTER TABLE answers ADD COLUMN ssadmin text NOT NULL DEFAULT ''")
 	sql.Query("ALTER TABLE players ADD COLUMN Nick text NOT NULL DEFAULT ''")
 	sql.Query("ALTER TABLE players ADD COLUMN synch text NOT NULL DEFAULT ''")
