@@ -360,10 +360,10 @@ net.Receive("metadmin.synch", function(len, ply)
 	local ref = net.ReadBool()
 	local sid = net.ReadString()
 	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") or not metadmin.players[sid] then return end
-	if not ref then
+	if not ref and ULib.ucl.query(ply,"ma.synch") then
 		metadmin.OnOffSynch(sid,metadmin.players[sid].synch and 0 or 1)
 		metadmin.GetDataSID(sid)
-	elseif ref and metadmin.players[sid].synch then
+	elseif ref and metadmin.players[sid].synch and ULib.ucl.query(ply,"ma.refsynch") then
 		metadmin.GetDataSID(sid)
 		metadmin.Notify(ply,Color(129,207,224),"Данные обновлены")
 	end
