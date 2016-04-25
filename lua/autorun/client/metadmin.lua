@@ -961,9 +961,10 @@ local menu
 function metadmin.playeract(nick,sid,rank,synch,Frame)
 	if IsValid(menu) then menu:Remove() end
 	menu = DermaMenu()
+	local row
 	if not synch then
 		if Access("ma.violationgive") then
-			local row = menu:AddOption("Добавить нарушение", function()
+			row = menu:AddOption("Добавить нарушение", function()
 				local frame = vgui.Create("DFrame")
 				frame:SetSize(585,140)
 				frame:SetTitle("Добавление нарушения")
@@ -1003,9 +1004,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 				Frame:Close()
 				RunConsoleCommand("ulx","prid",sid)
 			end)
+			row:SetIcon("icon16/tag_blue_add.png")
 		end
 		if Access("ma.taketalon") then
-			row:SetIcon("icon16/tag_blue_add.png")
 			row = menu:AddOption("Забрать талон", function()
 				local frame2 = vgui.Create("DFrame")
 				frame2:SetSize(400, 60)
