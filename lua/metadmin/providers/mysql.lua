@@ -127,7 +127,7 @@ function metadmin.CreateData(sid)
 	local Nick = ""
 	local ply = player.GetBySteamID(sid)
 	if ply then
-		Nick = ply:Nick()
+		Nick = db:escape(ply:Nick())
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
