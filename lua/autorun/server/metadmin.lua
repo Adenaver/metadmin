@@ -2,7 +2,7 @@ metadmin = metadmin or {}
 metadmin.category = "MetAdmin" -- Категория в ulx
 metadmin.provider = "sql" -- mysql,sql
 metadmin.api_key = ""
-metadmin.version = "28/01/2016"
+metadmin.version = "03/05/2016"
 
 if metadmin.provider == "mysql" then
 	metadmin.mysql.host = "localhost" -- Хост
