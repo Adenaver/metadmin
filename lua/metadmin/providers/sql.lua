@@ -103,7 +103,7 @@ function metadmin.CreateData(sid)
 			metadmin.setulxrank(ply,group)
 		end
 	end
-	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`,`Nick`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."','"..Nick.."')")
+	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`,`Nick`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."',"..Nick..")")
 	metadmin.players[sid] = {}
 	metadmin.players[sid].rank = group
 	metadmin.players[sid].Nick = Nick
