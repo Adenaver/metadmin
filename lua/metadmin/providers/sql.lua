@@ -96,14 +96,14 @@ function metadmin.CreateData(sid)
 	local Nick = ""
 	local ply = player.GetBySteamID(sid)
 	if ply then
-		Nick = sql.SQLStr(ply:Nick())
+		Nick = ply:Nick()
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
 			metadmin.setulxrank(ply,group)
 		end
 	end
-	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`,`Nick`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."',"..Nick..")")
+	result = sql.Query("INSERT INTO `players` (`id`,`SID`,`group`,`status`,`Nick`) VALUES (NULL,'"..sid.."','"..group.."','"..status.."',"..sql.SQLStr(Nick)..")")
 	metadmin.players[sid] = {}
 	metadmin.players[sid].rank = group
 	metadmin.players[sid].Nick = Nick
