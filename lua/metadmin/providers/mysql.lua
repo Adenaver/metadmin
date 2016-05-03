@@ -66,7 +66,7 @@ end
 function metadmin.UpdateNick(ply)
 	local sid = ply:SteamID()
 	if not metadmin.players[sid] then return end
-	local q = db:query("UPDATE `players` SET `Nick` = "..db:escape(ply:Nick()).." WHERE `SID`='"..sid.."'")
+	local q = db:query("UPDATE `players` SET `Nick` = '"..db:escape(ply:Nick()).."' WHERE `SID`='"..sid.."'")
     function q:onError(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -104,7 +104,7 @@ end
 
 
 function metadmin.SetSynchGroup(sid,rank)
-	local q = db:query("UPDATE `players` SET `synchgroup` = "..db:escape(rank).." WHERE `SID`='"..sid.."'")
+	local q = db:query("UPDATE `players` SET `synchgroup` = '"..db:escape(rank).."' WHERE `SID`='"..sid.."'")
     function q:onError(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -127,7 +127,7 @@ function metadmin.CreateData(sid)
 	local Nick = ""
 	local ply = player.GetBySteamID(sid)
 	if ply then
-		Nick = db:escape(ply:Nick())
+		Nick = ply:Nick()
 		if metadmin.groupwrite then
 			group = ply:GetUserGroup()
 		else
@@ -143,7 +143,7 @@ function metadmin.CreateData(sid)
 	metadmin.players[sid].violations = {}
 	metadmin.players[sid].exam = {}
 	metadmin.players[sid].exam_answers = {}
-	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`,`Nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..Nick.."')")
+	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`,`Nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..db:escape(Nick).."')")
     function q:onError(err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
