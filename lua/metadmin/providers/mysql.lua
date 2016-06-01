@@ -21,7 +21,7 @@ function metadmin.GetData(sid,cb)
 		cb(data)
     end
 	 
-  q.onError = function(err, sql)
+  q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -31,9 +31,8 @@ function metadmin.GetData(sid,cb)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
@@ -47,7 +46,7 @@ function metadmin.SaveData(sid)
 		print("Saved")
     end
 	 
-    function q:onError(err, sql)
+    function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -57,9 +56,8 @@ function metadmin.SaveData(sid)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
@@ -67,7 +65,7 @@ function metadmin.UpdateNick(ply)
 	local sid = ply:SteamID()
 	if not metadmin.players[sid] then return end
 	local q = db:query("UPDATE `players` SET `Nick` = '"..db:escape(ply:Nick()).."' WHERE `SID`='"..sid.."'")
-    function q:onError(err, sql)
+    function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -77,16 +75,15 @@ function metadmin.UpdateNick(ply)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
 function metadmin.OnOffSynch(sid,on)
 	if not metadmin.players[sid] or not isnumber(on) then return end
 	local q = db:query("UPDATE `players` SET `synch` = "..on.." WHERE `SID`='"..sid.."'")
-    function q:onError(err, sql)
+    function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -96,16 +93,15 @@ function metadmin.OnOffSynch(sid,on)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
 
 function metadmin.SetSynchGroup(sid,rank)
 	local q = db:query("UPDATE `players` SET `synchgroup` = '"..db:escape(rank).."' WHERE `SID`='"..sid.."'")
-    function q:onError(err, sql)
+    function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -115,9 +111,8 @@ function metadmin.SetSynchGroup(sid,rank)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
@@ -144,7 +139,7 @@ function metadmin.CreateData(sid)
 	metadmin.players[sid].exam = {}
 	metadmin.players[sid].exam_answers = {}
 	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`,`Nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..db:escape(Nick).."')")
-    function q:onError(err, sql)
+    function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -154,7 +149,6 @@ function metadmin.CreateData(sid)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
      
     q:start()
@@ -166,7 +160,7 @@ function metadmin.GetQuestions(cb)
 		cb(data)
     end
 	 
-  q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -176,7 +170,6 @@ function metadmin.GetQuestions(cb)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
      
     q:start()
@@ -192,8 +185,8 @@ function metadmin.SaveQuestion(id,questions,enabled)
 		enb = "`enabled` = '"..enabled.."'"
 		if questions then questions = questions.."," end
 	end
-   local q = db:query("UPDATE `questions` SET "..table..enb.." WHERE `id`='"..id.."'")
-  q.onError = function(err, sql)
+	local q = db:query("UPDATE `questions` SET "..table..enb.." WHERE `id`='"..id.."'")
+	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -203,15 +196,14 @@ function metadmin.SaveQuestion(id,questions,enabled)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
 function metadmin.SaveQuestionName(id,name)
-   local q = db:query("UPDATE `questions` SET `name` = '"..name.."' WHERE `id`='"..id.."'")
-  q.onError = function(err, sql)
+	local q = db:query("UPDATE `questions` SET `name` = '"..name.."' WHERE `id`='"..id.."'")
+	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -221,15 +213,14 @@ function metadmin.SaveQuestionName(id,name)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+	
     q:start()
 end
 
 function metadmin.RemoveQuestion(id)
-  local q = db:query("DELETE FROM `questions` WHERE `id`='"..id.."'")
-  q.onError = function(err, sql)
+	local q = db:query("DELETE FROM `questions` WHERE `id`='"..id.."'")
+	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -239,15 +230,14 @@ function metadmin.RemoveQuestion(id)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
-     
+
     q:start()
 end
 
 function metadmin.AddQuestion(name)
     local q = db:query("INSERT INTO `questions` (`name`,`questions`,`enabled`) VALUES ('"..db:escape(name).."','{}','0')")
-  q.onError = function(err, sql)
+  q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -257,7 +247,6 @@ function metadmin.AddQuestion(name)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
      
     q:start()
@@ -268,7 +257,7 @@ function metadmin.GetTests(sid,cb)
     q.onSuccess = function(self, data)
 		cb(data)
     end
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -278,7 +267,6 @@ function metadmin.GetTests(sid,cb)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 
 	q:start()
@@ -286,7 +274,7 @@ end
 
 function metadmin.AddTest(sid,ques,ans,adminsid)
     local q = db:query("INSERT INTO `answers` (`sid`,`date`,`questions`,`answers`,`answers`) VALUES ('"..sid.."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."','"..sid.."')")
-  q.onError = function(err, sql)
+  q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -296,7 +284,6 @@ function metadmin.AddTest(sid,ques,ans,adminsid)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
      
     q:start()
@@ -304,7 +291,7 @@ end
 
 function metadmin.SetStatusTest(id,status,ssadmin)
     local q = db:query("UPDATE `answers` SET `status` = '"..status.."',`ssadmin` = '"..ssadmin.."' WHERE `id`='"..tonumber(id).."'")
-  q.onError = function(err, sql)
+  q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
             db:wait()
@@ -314,7 +301,6 @@ function metadmin.SetStatusTest(id,status,ssadmin)
             end
         end
         MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-        q:start()
     end
      
     q:start()
@@ -325,7 +311,7 @@ function metadmin.GetViolations(sid,cb)
 	q.onSuccess = function(self, data)
 		cb(data)
 	end
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -335,7 +321,6 @@ function metadmin.GetViolations(sid,cb)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
@@ -343,7 +328,7 @@ end
 function metadmin.AddViolation(sid,adminsid,violation)
 	if not adminsid then adminsid = "CONSOLE" end
 	local q = db:query("INSERT INTO `violations` (`SID`,`date`,`admin`,`server`,`violation`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..adminsid.."','"..db:escape(metadmin.server).."','"..db:escape(violation).."')")
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -353,14 +338,13 @@ function metadmin.AddViolation(sid,adminsid,violation)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
 
 function metadmin.RemoveViolation(id)
 	local q = db:query("DELETE FROM `violations` WHERE `id`='"..id.."'")
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -370,7 +354,6 @@ function metadmin.RemoveViolation(id)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
@@ -380,7 +363,7 @@ function metadmin.GetExamInfo(sid,cb)
 	q.onSuccess = function(self, data)
 		cb(data)
 	end
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -390,13 +373,12 @@ function metadmin.GetExamInfo(sid,cb)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
 function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 	local q = db:query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..rank.."','"..adminsid.."','"..db:escape(note).."','"..type.."','"..db:escape(metadmin.server).."')")
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -406,7 +388,6 @@ function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
@@ -416,7 +397,7 @@ function metadmin.AllPlayers(group,cb)
 	q.onSuccess = function(self, data)
 		cb(data)
 	end
-	q.onError = function(err, sql)
+	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
 			db:wait()
@@ -426,7 +407,6 @@ function metadmin.AllPlayers(group,cb)
 			end
 		end
 		MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
-		q:start()
 	end
 	q:start()
 end
