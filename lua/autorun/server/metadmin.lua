@@ -5,6 +5,7 @@ metadmin.api_key = ""
 metadmin.version = "03/05/2016"
 
 if metadmin.provider == "mysql" then
+	metadmin.mysql = {}
 	metadmin.mysql.host = "localhost" -- Хост
 	metadmin.mysql.user = "root" -- Пользователь
 	metadmin.mysql.pass = "" -- Пароль
