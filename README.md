@@ -18,7 +18,7 @@
 * ЗАПРЕТИТЕ всем пользоваться командами !adduser и !removeuser, используйте !setrank взамен. Использование указанных команд не будет заносить информацию о сданных экзаменах в хранилище мода!
 
 Если хотите использовать MySQL БД (Актуально для нескольких синхронизуемых серверов), то понадобится еще сделать следующее:
-* Кинуть [это](http://drakehawke-gmod.googlecode.com/svn/trunk/AndyVincentGMod/RELEASE/gmsv_mysqloo_win32.dll) в garrysmod/lua/bin
+* Кинуть [это](http://wiki.metrostroi.net/gmsv_mysqloo_win32.dll) в garrysmod/lua/bin
 * Кинуть [это](http://puu.sh/1fhWu) в КОРНЕВУЮ ДИРЕКТОРИЮ СЕРВЕРА рядом с srcds.exe
 * Выполнить запрос к MySQL серверу (Текст хранится в hellreach_metoi.sql)
 * В /lua/autorun/server.lua metadmin.provider определить как mysql
