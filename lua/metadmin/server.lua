@@ -1,32 +1,20 @@
-metadmin = metadmin or {}
-metadmin.category = "MetAdmin" -- Категория в ulx
-metadmin.provider = "sql" -- mysql,sql
-metadmin.api_key = ""
-metadmin.version = "03/05/2016"
-
-if metadmin.provider == "mysql" then
-	metadmin.mysql = {}
-	metadmin.mysql.host = "localhost" -- Хост
-	metadmin.mysql.user = "root" -- Пользователь
-	metadmin.mysql.pass = "" -- Пароль
-	metadmin.mysql.database = "" -- Название базы данных
-	metadmin.mysql.port = 3306 -- Порт
-end
-
-local path = "metadmin/providers/"..metadmin.provider..".lua"
-if not file.Exists(path, "LUA") then
-	error("Не найдено. "..path)
-	return
-end
-include(path)
+metadmin.version = "DEV"
 metadmin.senduser = {"ranks","prom","dem","plombs","pogona"}
-metadmin.sendadm = {"server","groupwrite","disps","showserver","voice"}
+metadmin.sendadm = {"provider","server","groupwrite","disps","showserver","voice","MAGEnabled","synch"}
 
+metadmin.mysql = {["host"]="127.0.0.1",["database"]="",["port"]=3306,["user"]="root",["pass"]=""}
+
+--Дефолтные настройки
+metadmin.defprovider = "sql"
 metadmin.defserver = "SERVER"
 metadmin.defgroupwrite = false 
 metadmin.defdisps = {["traindispather"]=true}
 metadmin.defshowserver = false
+metadmin.defvoice = false
+metadmin.defMAGEnabled = true
+metadmin.defsynch = true
 metadmin.defranks = {
+	["driver"] = "Машинист (б/к)",
 	["driver3class"] = "Машинист 3 класса",
 	["driver2class"] = "Машинист 2 класса",
 	["driver1class"] = "Машинист 1 класса",
@@ -39,12 +27,14 @@ metadmin.defranks = {
 	["developer"] = "Разработчик"
 }
 metadmin.defprom = {
-	["user"] = "driver3class",
+	["user"] = "driver",
+	["driver"] = "driver3class",
 	["driver3class"] = "driver2class",
 	["driver2class"] = "driver1class"
 }
 metadmin.defdem = {
-	["driver3class"] = "user",
+	["driver"] = "user",
+	["driver3class"] = "driver",
 	["driver2class"] = "driver3class",
 	["driver1class"] = "driver2class"
 }
@@ -55,58 +45,126 @@ metadmin.defplombs = {
 	["RC1"] = "РЦ-1",
 	["UOS"] = "РЦ-УОС",
 	["OtklAVU"] = "ОтклАВУ",
-	["A5"] = "A5"
+	["A5"] = "A5",
 }
 metadmin.defpogona = {}
-local function start()
+
+
+function metadmin.GetSetting(name)
+	local result = sql.Query("SELECT * FROM `ma_settings` WHERE name="..sql.SQLStr(name))
+	if not result then return false end
+	if not result[1] then return false end
+	return result[1]
+end
+
+function metadmin.AddSetting(name,value,json)
+	sql.Query("INSERT INTO `ma_settings` (`name`,`value`,`json`) VALUES ("..sql.SQLStr(name)..","..sql.SQLStr(value)..","..json..")")
+end
+
+function metadmin.EditSetting(name,value,json)
+	sql.Query("UPDATE `ma_settings` SET `value` = "..sql.SQLStr(value)..", `json` = "..json.." WHERE `name`="..sql.SQLStr(name))
+end
+
+function metadmin.RemoveSetting(name)
+	sql.Query("DELETE FROM `ma_settings` WHERE `name`="..sql.SQLStr(name))
+end
+
+do
 	if not file.Exists("metadmin","DATA") then
 		file.CreateDir("metadmin")
 	end
+	
+	--Версия
 	if not file.Exists("metadmin/version.txt","DATA") then
 		file.Write("metadmin/version.txt",metadmin.version)
-		if metadmin.sqlfix then
-			metadmin.sqlfix()
-		end
 	else
 		local version = file.Read("metadmin/version.txt","DATA")
 		if version != metadmin.version then
+			metadmin.updated = true
 			file.Write("metadmin/version.txt",metadmin.version)
-			if metadmin.sqlfix then
-				metadmin.sqlfix()
-			end
 		end
 	end
-	if not file.Exists("metadmin/settings.txt","DATA") then
-		local tab = {}
-		for k,v in pairs(metadmin.senduser) do
-			metadmin[v] = metadmin["def"..v]
-			tab[v] = metadmin["def"..v]
+	
+	--Настройки
+	if not sql.TableExists("ma_settings") then
+		sql.Query([[CREATE TABLE `ma_settings` (
+		`name` text NOT NULL,
+		`value` text NOT NULL,
+		`json` int(1)
+		)]])
+	end
+	for k,v in pairs(metadmin.senduser) do
+		local setting = metadmin.GetSetting(v)
+		if setting then
+			local value = setting.value
+			if tonumber(setting.json) == 1 then value = util.JSONToTable(value) end
+			metadmin[v] = value
+		else
+			local value = metadmin["def"..v]
+			metadmin[v] = value
+			local json = 0
+			if istable(value) then value = util.TableToJSON(value) json = 1 end
+			metadmin.AddSetting(v,value,json)
 		end
-		for k,v in pairs(metadmin.sendadm) do
-			metadmin[v] = metadmin["def"..v]
-			tab[v] = metadmin["def"..v]
+	end
+	for k,v in pairs(metadmin.sendadm) do
+		local setting = metadmin.GetSetting(v)
+		if setting then
+			local value = setting.value
+			if tonumber(setting.json) == 1 then value = util.JSONToTable(value) end
+			metadmin[v] = value
+		else
+			local value = metadmin["def"..v]
+			metadmin[v] = value
+			local json = 0
+			if istable(value) then value = util.TableToJSON(value) json = 1 end
+			metadmin.AddSetting(v,value,json)
 		end
-		file.Write("metadmin/settings.txt",util.TableToJSON(tab))
+	end
+	for k,v in pairs(metadmin.pogona) do
+		resource.AddFile(v)
+	end
+	
+	local setting_api = metadmin.GetSetting("api_key")
+	if setting_api then
+		if setting_api.value != "" then
+			metadmin.api_key = setting_api.value
+		end
+	end
+	
+	local setting_mysql = metadmin.GetSetting("mysql")
+	if setting_mysql then
+		metadmin.mysql = util.JSONToTable(setting_mysql.value)
+		if metadmin.provider == "mysql" then
+			if not file.Exists("bin/gmsv_mysqloo_win32.dll","LUA") then
+				metadmin.print("Модуль MYSQL не найден!",true)
+				metadmin.provider = "sql"
+			end
+			for k,v in pairs(metadmin.mysql) do
+				if v == "" then
+					print(k.."=='"..v.."'")
+					metadmin.provider = "sql"
+					break
+				end
+			end
+		end
 	else
-		local tab = util.JSONToTable(file.Read("metadmin/settings.txt","DATA"))
-		for k,v in pairs(metadmin.senduser) do
-			if tab[v] then
-				metadmin[v] = tab[v]
-			else
-				metadmin[v] = metadmin["def"..v]
-			end
+		if metadmin.provider == "mysql" then
+			metadmin.print("Настройки mysql не найдены, используем sql",true)
+			metadmin.provider = "sql"
 		end
-		for k,v in pairs(metadmin.sendadm) do
-			if tab[v] then
-				metadmin[v] = tab[v]
-			else
-				metadmin[v] = metadmin["def"..v]
-			end
-		end
+		metadmin.AddSetting("mysql",[[{"host":"127.0.0.1","database":"","pass":"","user":"root","port":3306}]],1)
 	end
-	http.Fetch("http://metrostroi.net/api/metadmin_version",function(body,len,headers,code) if metadmin.version != body then metadmin.notifver = body end end)
+	local path = "metadmin/providers/"..metadmin.provider..".lua"
+	if not file.Exists(path, "LUA") then
+		error("Не найдено. "..path)
+	end
+	include(path)
 end
-start()
+
+function metadmin.print(str,err)
+	MsgC((err and color_red or Color(255,0,255)),"[MetAdmin]"..(err and "[ОШИБКА] " or " ")..str.."\n")
+end
 
 util.AddNetworkString("metadmin.profile")
 util.AddNetworkString("metadmin.violations")
@@ -119,14 +177,11 @@ util.AddNetworkString("metadmin.questionstab")
 util.AddNetworkString("metadmin.notify")
 util.AddNetworkString("metadmin.order")
 util.AddNetworkString("metadmin.settings")
+util.AddNetworkString("metadmin.settings.mysql")
 util.AddNetworkString("metadmin.report")
 util.AddNetworkString("metadmin.allplayers")
 util.AddNetworkString("metadmin.synch")
-util.AddNetworkString("metadmin.trserver")
-
-for k,v in pairs(metadmin.pogona) do
-	resource.AddFile(v)
-end
+util.AddNetworkString("metadmin.viewblank")
 
 metadmin.questions = metadmin.questions or {}
 hook.Add("InitPostEntity","MetAdminInit",function()
@@ -157,6 +212,10 @@ hook.Add("InitPostEntity","MetAdminInit",function()
 	ULib.ucl.registerAccess("ma.settings", ULib.ACCESS_SUPERADMIN, "Доступ к настройкам.",metadmin.category)
 	ULib.ucl.registerAccess("ma.synch", ULib.ACCESS_SUPERADMIN, "Включение/выключение синхронизации игрока с сайтом.",metadmin.category)
 	ULib.ucl.registerAccess("ma.refsynch", ULib.ACCESS_SUPERADMIN, "Обновить данные игрока с сайта.",metadmin.category)
+	hook.Add(ULib.HOOK_PLAYER_NAME_CHANGED,"metadmin",function(ply,LastNick,Nick)
+		metadmin.UpdateNick(ply)
+		metadmin.players[ply:SteamID()].nick = Nick
+	end)
 	timer.Simple(2.5, function()
 		metadmin.GetQuestions(
 			function(data)
@@ -165,12 +224,69 @@ hook.Add("InitPostEntity","MetAdminInit",function()
 					metadmin.questions[id] = {}
 					metadmin.questions[id].name = v.name
 					metadmin.questions[id].questions = util.JSONToTable(v.questions)
+					metadmin.questions[id].timelimit = tonumber(v.timelimit)
 					metadmin.questions[id].enabled = tonumber(v.enabled)
 				end
 			end
 		)
 	end)
+	timer.Simple(1,function()
+		if metadmin.version != "DEV" then
+			metadmin.print("Проверка версии.")
+			http.Fetch("http://metrostroi.net/api/metadmin_version",function(body,len,headers,code)
+				if metadmin.version != body then
+					metadmin.notifver = body
+					metadmin.print("Версия устарела.")
+				else
+					metadmin.print("Версия актуальна.")
+				end
+			end)
+		end
+		if metadmin.updated and metadmin.provider == "sql" then
+			metadmin.UpdateBD()
+		end
+		if metadmin.MAGEnabled then
+			http.Fetch("http://metrostroi.net/api/mag_bans/",function(body,len,headers,code)
+				metadmin.MAG = util.JSONToTable(body)
+			end)
+			timer.Create("MAG",5*60,0,function()
+				http.Fetch("http://metrostroi.net/api/mag_bans/",function(body,len,headers,code)
+					metadmin.MAG = util.JSONToTable(body)
+					for k,v in pairs(metadmin.MAG) do
+						local target = player.GetBySteamID(v.steamid)
+						if target then
+							target:Kick("MAG banned from secure server")
+						end
+					end
+				end)
+			end)
+		end
+		if metadmin.api_key then
+			metadmin.print("Проверка АПИ ключа")
+			local time = os.time()
+			local hash = metadmin.sha256(GetConVar("hostport"):GetString()..tostring(time)..metadmin.api_key)
+			http.Post("http://metrostroi.net/api/key_check",{port=GetConVar("hostport"):GetString(),date=tostring(time),hash=hash},
+				function(body,len,headers,code)
+					if body != "ok" then
+						local str = "АПИ ключ не прошел проверку. ("..body..")"
+						metadmin.print(str,true)
+						metadmin.Log(str)
+						metadmin.api_key = false
+						SetGlobalBool("metadmin.partner",false)
+					else
+						SetGlobalBool("metadmin.partner",true)
+						metadmin.print("АПИ ключ прошел проверку.")
+					end
+				end
+			)
+		end
+	end)
 end)
+
+function metadmin.IsValidSID(sid)
+	return (string.match(sid,"(STEAM_[0-5]:[01]:%d+)") != nil)
+end
+
 function metadmin.Notify(target,...)
 	net.Start("metadmin.notify")
 		net.WriteTable({...})
@@ -187,6 +303,7 @@ end
 
 hook.Add('MetrostroiPlombBroken', 'MetAdmin', function(train,but,drv)
 	local ply = train:GetDriver()
+	if not ply then return end
 	if ply.plombs[but] then
 		ply.plombs[but] = nil
 	else
@@ -224,7 +341,23 @@ function metadmin.SendSettings(ply)
 	net.Send(ply)
 end
 
-hook.Add("PlayerInitialSpawn", "metadmin", function(ply)
+hook.Add("CheckPassword","MetAdmin.MAG", function(steamid64, ip, sv_password, cl_password, cl_name)
+	if metadmin.MAGEnabled and metadmin.MAG then
+		local sid = util.SteamIDFrom64(steamid64)
+		local found
+		for k,v in SortedPairsByMemberValue(metadmin.MAG,"unban_date",true) do
+			if v.steamid == sid and (v.unban_date == false or v.unban_date > os.time()) then
+				found = v
+				break
+			end
+		end
+		if found then
+			return false,("MAG banned from secure server"..(found.unban_date and ("\nUnban date: "..os.date("%X - %d/%m/%Y", found.unban_date)) or ""))
+		end
+	end
+end)
+
+hook.Add("PlayerInitialSpawn", "MetAdmin.Spawn", function(ply)
 	metadmin.GetDataSID(ply:SteamID())
 	spawn(ply)
 	metadmin.SendSettings(ply)
@@ -238,11 +371,6 @@ hook.Add("PlayerInitialSpawn", "metadmin", function(ply)
 	end
 end)
 
-hook.Add(ULib.HOOK_PLAYER_NAME_CHANGED,"metadmin",function(ply,LastNick,Nick)
-	metadmin.UpdateNick(ply)
-	metadmin.players[ply:SteamID()].Nick = Nick
-end)
-
 function refreshquestions()
 	metadmin.GetQuestions(
 		function(data)
@@ -252,6 +380,7 @@ function refreshquestions()
 				metadmin.questions[id] = {}
 				metadmin.questions[id].name = v.name
 				metadmin.questions[id].questions = util.JSONToTable(v.questions)
+				metadmin.questions[id].timelimit = v.timelimit
 				metadmin.questions[id].enabled = tonumber(v.enabled)
 			end
 			for k, v in pairs(player.GetAll()) do
@@ -273,7 +402,7 @@ local status = {[0]="На проверке","Сдал","Не сдал"}
 net.Receive("metadmin.action", function(len,ply)
 	if not ULib.ucl.query(ply,"ma.pl") then return end
 	local sid = net.ReadString()
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
+	if not metadmin.IsValidSID(sid) then return end
 	local action = net.ReadInt(5)
 	local str = net.ReadString()
 	if action == 1 and ULib.ucl.query(ply,"ma.promote") then
@@ -311,18 +440,41 @@ end)
 net.Receive("metadmin.settings", function(len, ply)
 	if not ULib.ucl.query(ply,"ma.settings") then return end
 	for k,v in pairs(net.ReadTable()) do
-		metadmin[k] = v
+		if k == "provider" and (v == "sql" or v == "mysql") then
+			if v == "mysql" then
+				if not file.Exists("bin/gmsv_mysqloo_win32.dll","LUA") then metadmin.Notify(ply,Color(129,207,224),"Модуль MYSQL не найден!") return end
+				for k,v in pairs(metadmin.mysql) do
+					if v == "" then metadmin.Notify(ply,Color(129,207,224),"Проверьте настройки MYSQL.") return end
+				end
+			end
+		end
+		if metadmin[k] != v then
+			metadmin[k] = v
+			local json = 0
+			if istable(v) then v = util.TableToJSON(v) json = 1 end
+			metadmin.EditSetting(k,v,json)
+		end
 	end
-	local tab = {}
-	for k,v in pairs(metadmin.senduser) do
-		tab[v] = metadmin[v]
+	for k,v in pairs(player.GetAll()) do
+		metadmin.SendSettings(v)
 	end
-	for k,v in pairs(metadmin.sendadm) do
-		tab[v] = metadmin[v]
+end)
+
+net.Receive("metadmin.settings.mysql", function(len, ply)
+	if not ULib.ucl.query(ply,"ma.settings") then return end
+	local bool = net.ReadBool()
+	if bool then
+		net.Start("metadmin.settings.mysql")
+			net.WriteTable({host = metadmin.mysql.host,database = metadmin.mysql.database,user = metadmin.mysql.user,port = metadmin.mysql.port})
+		net.Send(ply)
+	else
+		local tab = net.ReadTable()
+		for k,v in pairs(metadmin.mysql) do
+			if not tab[k] then continue end
+			metadmin.mysql[k] = tab[k]
+		end
+		metadmin.EditSetting("mysql",util.TableToJSON(metadmin.mysql),1)
 	end
-	
-	file.Write("metadmin/settings.txt",util.TableToJSON(tab))
-	metadmin.SendSettings(ply)
 end)
 
 net.Receive("metadmin.order", function(len, ply)
@@ -337,6 +489,27 @@ net.Receive("metadmin.order", function(len, ply)
 end)
 
 net.Receive("metadmin.report",function(len,ply)
+	if not metadmin.api_key or metadmin.api_key == "" then metadmin.Notify(ply,"Сервер не поддерживает функцию жалоб.") return end
+	if (ply.reporttime and ply.reporttime < os.time()) then metadmin.Notify(ply,"Жалобу можно подать раз в пять минут.") return end
+	local tab = net.ReadTable()
+	local target = tab.SID
+	if not metadmin.IsValidSID(target) then return end
+	local text = tab.reason
+	if utf8.len(text) < 10 or utf8.len(text) > 254 then metadmin.Notify(ply,"Жалоба не может содержать меньше 10 символов и больше 255.") return end
+	local time = os.time()
+	local hash = metadmin.sha256(text..tostring(time)..target..ply:SteamID()..metadmin.api_key)
+	http.Post("http://metrostroi.net/api/report",{reason=text,date=tostring(time),target=target,author=ply:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+		function(body,len,headers,code)
+			if body != "ok" then
+				if body == "access denied" then metadmin.Notify(ply,"Нет доступа.") end
+				local str = "Ошибка запроса 'report'. ("..body..")"
+				metadmin.print(str,true)
+				metadmin.Log(str)
+			end
+		end
+	)
+	ply.reporttime = os.time()+300
+	metadmin.Notify(ply,"Жалоба отправлена.")
 end)
 
 net.Receive("metadmin.allplayers", function(len, ply)
@@ -348,7 +521,7 @@ net.Receive("metadmin.allplayers", function(len, ply)
 		local tab = {}
 		for k,v in pairs(cb) do
 			tab[k] = {}
-			tab[k].nick = v.Nick
+			tab[k].nick = v.nick
 			tab[k].SID = v.SID
 		end
 		net.Start("metadmin.allplayers")
@@ -360,7 +533,7 @@ end)
 net.Receive("metadmin.synch", function(len, ply)
 	local ref = net.ReadBool()
 	local sid = net.ReadString()
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") or not metadmin.players[sid] then return end
+	if not metadmin.IsValidSID(sid) or not metadmin.players[sid] then return end
 	if not ref and ULib.ucl.query(ply,"ma.synch") then
 		metadmin.OnOffSynch(sid,metadmin.players[sid].synch and 0 or 1)
 		metadmin.GetDataSID(sid)
@@ -374,36 +547,89 @@ end)
 local talons = {[1]="зеленый",[2]="желтый",[0]="красный"}
 function metadmin.settalon(ply,sid,type,reason)
 	if metadmin.players[sid] then
-		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.api_key then metadmin.Notify(ply,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.players[ply:SteamID()].synch then metadmin.Notify(ply,Color(129,207,224),"У Вас нет прав на это!") return end
 		if metadmin.players[sid].status.nom == "Пле" then return end
 		if type == 2 then
+			local status = {}
+			status.date = os.time()
+			status.admin = ply:SteamID()
 			if metadmin.players[sid].status.nom + 1 <= 3 then
-				metadmin.players[sid].status.nom = metadmin.players[sid].status.nom + 1
-				metadmin.players[sid].status.date = os.time()
-				metadmin.players[sid].status.admin = ply:SteamID()
+				status.nom = metadmin.players[sid].status.nom + 1
+			elseif metadmin.players[sid].status.nom + 1 > 3 then
+				status.nom = 1
+				if metadmin.players[sid].rank != "user" then
+					local reason = (ply:Nick().." ("..ply:SteamID()..") отобрал красный талон.\nУВОЛЕН!")
+					if metadmin.players[sid].synch then
+						local hash = metadmin.sha256(reason.."2"..tostring(status.date).."user"..sid..ply:SteamID()..metadmin.api_key)
+						http.Post("http://metrostroi.net/api/setrank/",{reason=reason,type="2",group="user",date=tostring(status.date),target=sid,author=ply:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+							function(body,len,headers,code)
+								if body != "ok" then
+									if body == "access denied" then metadmin.Notify(ply,"Нет доступа.") end
+									local str = "Ошибка запроса 'setrank'. ("..body..")"
+									metadmin.print(str,true)
+									metadmin.Log(str)
+								end
+							end
+						)
+					else
+						local target = player.GetBySteamID(sid)
+						if target then
+							metadmin.setulxrank(target,"user")
+						end
+						metadmin.AddExamInfo(sid,"user",ply:SteamID(),reason,2)
+						metadmin.players[sid].rank = "user"
+						metadmin.GetExamInfo(sid, function(data)
+							metadmin.players[sid].exam = data
+						end)
+					end
+				end
+			end
+			if metadmin.players[sid].synch then
+				local hash = metadmin.sha256(tostring(status.nom)..tostring(status.date)..sid..status.admin..metadmin.api_key)
+				http.Post("http://metrostroi.net/api/set_coupon/",{number=tostring(status.nom),date=tostring(status.date),target=sid,author=status.admin,port=GetConVar("hostport"):GetString(),hash=hash},
+					function(body,len,headers,code)
+						if body != "ok" then
+							if body == "access denied" then metadmin.Notify(ply,"Нет доступа.") end
+							local str = "Ошибка запроса 'set_coupon'. ("..body..")"
+							metadmin.print(str,true)
+							metadmin.Log(str)
+						else
+							metadmin.GetDataSID(sid)
+							metadmin.Notify(ply,Color(129,207,224),"Вы успешно отобрали талон.")
+							metadmin.Log(ply:Nick().." отобрал талон у игрока "..sid)
+						end
+					end
+				)
+			else
+				metadmin.players[sid].status = status
+				metadmin.SaveData(sid)
 				metadmin.Notify(ply,Color(129,207,224),"Вы успешно отобрали талон.")
 				metadmin.Log(ply:Nick().." отобрал талон у игрока "..sid)
-				metadmin.SaveData(sid)
-			elseif metadmin.players[sid].status.nom + 1 > 3 then
-				metadmin.players[sid].status.nom = 1
-				metadmin.players[sid].status.date = os.time()
-				metadmin.players[sid].status.admin = ""
-				local target = player.GetBySteamID(sid)
-				if target then
-					metadmin.setulxrank(target,newgroup)
-				end
-				metadmin.AddExamInfo(sid,"user","CONSOLE",ply:Nick().." ("..ply:SteamID()..") отобрал красный талон.\nУВОЛЕН!",2)
-				metadmin.players[sid].rank = "user"
-				metadmin.SaveData(sid)
-				metadmin.GetExamInfo(sid, function(data)
-					metadmin.players[sid].exam = data
-				end)
 			end
 			if reason then
-				metadmin.violationgive(ply,sid,"Забрал "..talons[metadmin.players[sid].status.nom - 1].." талон.\n"..reason)
+				metadmin.violationgive(ply,sid,"Забрал "..talons[status.nom-1].." талон.\n"..reason)
 			end
 		else
 			if metadmin.players[sid].status.nom - 1 > 0 then
+				if metadmin.players[sid].synch then
+					local time = os.time()
+					local hash = metadmin.sha256(tostring(metadmin.players[sid].status.nom-1)..tostring(time)..sid..ply:SteamID()..metadmin.api_key)
+					http.Post("http://metrostroi.net/api/set_coupon/",{number=tostring(metadmin.players[sid].status.nom-1),date=tostring(time),target=sid,author=ply:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+						function(body,len,headers,code)
+							if body != "ok" then
+								local str = "Ошибка запроса 'set_coupon'. ("..body..")"
+								metadmin.print(str,true)
+								metadmin.Log(str)
+							else
+								metadmin.GetDataSID(sid)
+								metadmin.Notify(ply,Color(129,207,224),"Вы успешно вернули талон.")
+								metadmin.Log(ply:Nick().." вернул талон игроку "..sid)
+							end
+						end
+					)
+					return
+				end
 				metadmin.players[sid].status.nom = metadmin.players[sid].status.nom - 1
 				metadmin.players[sid].status.date = os.time()
 				metadmin.players[sid].status.admin = ply:SteamID()
@@ -430,7 +656,26 @@ net.Receive("metadmin.violations",function(len,ply)
 end)
 
 function metadmin.violationgive(call,sid,str)
-	if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+	if metadmin.players[sid].synch then
+		if not metadmin.api_key then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if not metadmin.players[call:SteamID()].synch then metadmin.Notify(call,Color(129,207,224),"У Вас нет прав на это!") return end
+		local time = os.time()
+		local hash = metadmin.sha256(str..tostring(time)..sid..call:SteamID()..metadmin.api_key)
+		http.Post("http://metrostroi.net/api/violation",{reason=str,date=tostring(time),target=sid,author=call:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+			function(body,len,headers,code)
+				if body != "ok" then
+					if body == "access denied" then metadmin.Notify(call,"Нет доступа.") end
+					local str = "Ошибка запроса 'violation'. ("..body..")"
+					metadmin.print(str,true)
+					metadmin.Log(str)
+				else
+					metadmin.GetDataSID(sid)
+					call:ChatPrint("Нарушение добавлено.")
+				end
+			end
+		)
+		return
+	end
 	metadmin.AddViolation(sid,call:SteamID(),str)
 	call:ChatPrint("Нарушение добавлено.")
 	metadmin.GetViolations(sid, function(data)
@@ -453,14 +698,14 @@ end
 function metadmin.profile(call,sid)
 	if type(sid) != "string" then sid = sid:SteamID() end
 	if sid == "" then sid = call:SteamID() end
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then
+	if not metadmin.IsValidSID(sid) then
 		for k, v in pairs(player.GetAll()) do
 			if string.find(string.lower(v:Nick()),string.lower(sid)) then
 				sid = v:SteamID()
 			end
 		end 
 	end
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
+	if not metadmin.IsValidSID(sid) then return end
 	if metadmin.players[sid] then
 		if metadmin.players[sid].nodata then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом. Но что-то пошло не так!") return end
 		local tab = {}
@@ -496,12 +741,11 @@ function metadmin.profile(call,sid)
 		end
 		tab.rank = metadmin.players[sid].rank
 		tab.SID = sid
-		tab.Nick = metadmin.players[sid].Nick
-		if tab.Nick == "" then
-			tab.Nick = GetNick(sid,"")
+		tab.nick = metadmin.players[sid].nick
+		if tab.nick == "" then
+			tab.nick = GetNick(sid,"")
 		end
 		tab.nvio = #metadmin.players[sid].violations
-		tab.badpl = metadmin.players[sid].badpl
 		tab.synch = metadmin.players[sid].synch
 		tab.icon = metadmin.players[sid].icon
 		net.Start("metadmin.profile")
@@ -523,36 +767,63 @@ end
 
 function metadmin.setrank(call,sid,rank)
 	if type(sid) != "string" then sid = sid:SteamID() end
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then
+	if not metadmin.IsValidSID(sid) then
 		for k, v in pairs(player.GetAll()) do
 			if string.find(string.lower(v:Nick()),string.lower(sid)) then
 				sid = v:SteamID()
 			end
 		end 
 	end
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
+	if not metadmin.IsValidSID(sid) then return end
 	if metadmin.players[sid] then
 		if metadmin.ranks[rank] and ULib.ucl.groups[rank] then
-			if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
-			if metadmin.players[sid].rank == rank then metadmin.Notify(call,Color(129,207,224),"Что ты пытаешься сделать? Ранги идентичны!") return end
-			metadmin.players[sid].rank = rank
-			metadmin.SaveData(sid)
-			local target = player.GetBySteamID(sid)
-			if target then
-				metadmin.setulxrank(target,rank)
-				spawn(target)
+			if not IsValid(call) and metadmin.players[sid].synch then
+				metadmin.OnOffSynch(sid,0)
+				metadmin.GetDataSID(sid)
+				metadmin.setrank(call,sid,rank)
+				return
 			end
+			if metadmin.players[sid].synch and not metadmin.api_key then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+			if metadmin.players[sid].synch and not metadmin.players[call:SteamID()].synch then metadmin.Notify(call,Color(129,207,224),"У Вас нет прав на это!") return end
+			if metadmin.players[sid].rank == rank then metadmin.Notify(call,Color(129,207,224),"Что ты пытаешься сделать? Ранги идентичны!") return end
 			local nick = IsValid(call) and call:Nick() or "CONSOLE"
 			local steamid = IsValid(call) and call:SteamID() or "CONSOLE"
-			local str = nick.." установил ранг игроку "..GetNick(sid,sid).."|"..metadmin.ranks[rank]
-			metadmin.Notify(false,Color(129,207,224),str)
-			metadmin.Log(str)
-			metadmin.AddExamInfo(sid,rank,steamid,"Установка ранга через команду.",3)
-			timer.Simple(1,function()
-				metadmin.GetExamInfo(sid, function(data)
-					metadmin.players[sid].exam = data
+			local time = os.time()
+			if metadmin.players[sid].synch then
+				local hash = metadmin.sha256("Установка ранга через команду.".."3"..tostring(time)..rank..sid..steamid..metadmin.api_key)
+				http.Post("http://metrostroi.net/api/setrank",{reason="Установка ранга через команду.",type="3",group=rank,date=tostring(time),target=sid,author=steamid,port=GetConVar("hostport"):GetString(),hash=hash},
+					function(body,len,headers,code)
+						if body != "ok" then
+							if body == "access denied" then metadmin.Notify(call,"Нет доступа.") end
+							local str = "Ошибка запроса 'setrank'. ("..body..")"
+							metadmin.print(str,true)
+							metadmin.Log(str)
+						else
+							metadmin.GetDataSID(sid)
+							local str = nick.." установил ранг игроку "..GetNick(sid,sid).."|"..metadmin.ranks[rank]
+							metadmin.Notify(false,Color(129,207,224),str)
+							metadmin.Log(str)
+						end
+					end
+				)
+			else
+				metadmin.players[sid].rank = rank
+				metadmin.SaveData(sid)
+				local target = player.GetBySteamID(sid)
+				if target then
+					metadmin.setulxrank(target,rank)
+					spawn(target)
+				end
+				local str = nick.." установил ранг игроку "..GetNick(sid,sid).."|"..metadmin.ranks[rank]
+				metadmin.Notify(false,Color(129,207,224),str)
+				metadmin.Log(str)
+				metadmin.AddExamInfo(sid,rank,steamid,"Установка ранга через команду.",3)
+				timer.Simple(1,function()
+					metadmin.GetExamInfo(sid, function(data)
+						metadmin.players[sid].exam = data
+					end)
 				end)
-			end)
+			end
 		else
 			metadmin.Notify(call,Color(129,207,224),"Ранг "..rank.." отсутствует в metadmin!")
 		end
@@ -564,25 +835,48 @@ end
 function metadmin.promotion(call,sid,note)
 	if not ULib.ucl.query(call,"ma.promote") then return end
 	if metadmin.players[sid] then
-		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.api_key then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.players[call:SteamID()].synch then metadmin.Notify(call,Color(129,207,224),"У Вас нет прав на это!") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.prom[group]
 		if not newgroup and not ULib.ucl.groups[newgroup] then return end
 		if not ULib.ucl.query(call,"ma.prom"..newgroup) then return end
-		local target = player.GetBySteamID(sid)
-		if target then
-			metadmin.setulxrank(target,newgroup)
+		if metadmin.players[sid].synch then
+			local time = os.time()
+			local hash = metadmin.sha256(note.."1"..tostring(time)..newgroup..sid..call:SteamID()..metadmin.api_key)
+			http.Post("http://metrostroi.net/api/setrank",{reason=note,type="1",group=newgroup,date=tostring(time),target=sid,author=call:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+				function(body,len,headers,code)
+					if body != "ok" then
+						if body == "access denied" then metadmin.Notify(call,"Нет доступа.") end
+						local str = "Ошибка запроса 'setrank'. ("..body..")"
+						metadmin.print(str,true)
+						metadmin.Log(str)
+					else
+						metadmin.GetDataSID(sid)
+						local nick = GetNick(sid,sid)
+						local str = call:Nick().." повысил игрока "..nick.." до "..metadmin.ranks[newgroup]
+						metadmin.Notify(false,Color(129,207,224),str)
+						metadmin.Log(str)
+						local target = player.GetBySteamID(sid)
+					end
+				end
+			)
+		else
+			local target = player.GetBySteamID(sid)
+			if target then
+				metadmin.setulxrank(target,newgroup)
+			end
+			local nick = GetNick(sid,sid)
+			local str = call:Nick().." повысил игрока "..nick.." до "..metadmin.ranks[newgroup]
+			metadmin.Notify(false,Color(129,207,224),str)
+			metadmin.Log(str)
+			metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,1)
+			metadmin.players[sid].rank = newgroup
+			metadmin.SaveData(sid)
+			metadmin.GetExamInfo(sid, function(data)
+				metadmin.players[sid].exam = data
+			end)
 		end
-		local nick = GetNick(sid,sid)
-		local str = call:Nick().." повысил игрока "..nick.." до "..metadmin.ranks[newgroup]
-		metadmin.Notify(false,Color(129,207,224),str)
-		metadmin.Log(str)
-		metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,1)
-		metadmin.players[sid].rank = newgroup
-		metadmin.SaveData(sid)
-		metadmin.GetExamInfo(sid, function(data)
-			metadmin.players[sid].exam = data
-		end)
 	else
 		metadmin.GetDataSID(sid,function() metadmin.promotion(call,sid,note) end)
 	end
@@ -590,24 +884,46 @@ end
 function metadmin.demotion(call,sid,note)
 	if not ULib.ucl.query(call,"ma.demote") then return end
 	if metadmin.players[sid] then
-		if metadmin.players[sid].synch then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.api_key then metadmin.Notify(call,Color(129,207,224),"Данный игрок синхронизируется с сайтом.") return end
+		if metadmin.players[sid].synch and not metadmin.players[call:SteamID()].synch then metadmin.Notify(call,Color(129,207,224),"У Вас нет прав на это!") return end
 		local group = metadmin.players[sid].rank
 		local newgroup = metadmin.dem[group]
 		if not newgroup and not ULib.ucl.groups[newgroup] then return end
-		local target = player.GetBySteamID(sid)
-		if target then
-			metadmin.setulxrank(target,newgroup)
+		if metadmin.players[sid].synch then
+			local time = os.time()
+			local hash = metadmin.sha256(note.."2"..tostring(time)..newgroup..sid..call:SteamID()..metadmin.api_key)
+			http.Post("http://metrostroi.net/api/setrank",{reason=note,type="2",group=newgroup,date=tostring(time),target=sid,author=call:SteamID(),port=GetConVar("hostport"):GetString(),hash=hash},
+				function(body,len,headers,code)
+					if body != "ok" then
+						if body == "access denied" then metadmin.Notify(call,"Нет доступа.") end
+						local str = "Ошибка запроса 'setrank'. ("..body..")"
+						metadmin.print(str,true)
+						metadmin.Log(str)
+					else
+						metadmin.GetDataSID(sid)
+						local nick = GetNick(sid,sid)
+						local str = call:Nick().." понизил игрока "..nick.." до "..metadmin.ranks[newgroup]
+						metadmin.Notify(false,Color(129,207,224),str)
+						metadmin.Log(str)
+					end
+				end
+			)
+		else
+			local target = player.GetBySteamID(sid)
+			if target then
+				metadmin.setulxrank(target,newgroup)
+			end
+			local nick = GetNick(sid,sid)
+			local str = call:Nick().." понизил игрока "..nick.." до "..metadmin.ranks[newgroup]
+			metadmin.Notify(false,Color(129,207,224),str)
+			metadmin.Log(str)
+			metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,2)
+			metadmin.players[sid].rank = newgroup
+			metadmin.SaveData(sid)
+			metadmin.GetExamInfo(sid, function(data)
+				metadmin.players[sid].exam = data
+			end)
 		end
-		local nick = GetNick(sid,sid)
-		local str = call:Nick().." понизил игрока "..nick.." до "..metadmin.ranks[newgroup]
-		metadmin.Notify(false,Color(129,207,224),str)
-		metadmin.Log(str)
-		metadmin.AddExamInfo(sid,newgroup,call:SteamID(),note,2)
-		metadmin.players[sid].rank = newgroup
-		metadmin.SaveData(sid)
-		metadmin.GetExamInfo(sid, function(data)
-			metadmin.players[sid].exam = data
-		end)
 	else
 		metadmin.GetDataSID(sid,function() metadmin.demotion(call,sid,note) end)
 	end
@@ -635,6 +951,9 @@ net.Receive("metadmin.qaction",function(len,ply)
 	elseif action == 5 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
 		metadmin.SaveQuestionName(id,net.ReadString())
 		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно изменен")
+	elseif action == 6 and metadmin.questions[id] and ULib.ucl.query(ply,"ma.questionsedit") then
+		metadmin.SaveQuestionRecTime(id,net.ReadString())
+		metadmin.Notify(ply,Color(129,207,224),"Шаблон "..metadmin.questions[id].name.." успешно изменен")
 	else return end
 	refreshquestions()
 end)
@@ -648,12 +967,15 @@ function metadmin.sendquestions(call,sid,id)
 		if metadmin.questions[id].enabled == 0 then return metadmin.Notify(call,Color(129,207,224),"Этот шаблон отключен!") end
 		net.Start("metadmin.questions")
 			net.WriteTable(metadmin.questions[id].questions)
+			net.WriteInt(metadmin.questions[id].timelimit or 0,32)
 		net.Send(target)
 		target.anstoques = {}
 		target.anstoques.nick = call:Nick()
 		target.anstoques.adminsid = call:SteamID()
 		target.anstoques.idquestions = id
 		target.anstoques.time = os.time()
+		target.anstoques.answers = {}
+		target:SetNWBool("anstoques",true)
 		local str = call:Nick().." отправил тест ("..metadmin.questions[id].name..") игроку "..target:Nick()
 		metadmin.Notify(false,Color(129,207,224),str)
 		metadmin.Log(str)
@@ -672,6 +994,7 @@ function metadmin.view_answers(call,sid,id)
 		tab.nick = GetNick(sid,"UNKNOWN")
 		tab.sid = sid
 		tab.questions = metadmin.questions[tonumber(tab.answerstab.questions)].questions
+		tab.timelimit = tonumber(metadmin.questions[tonumber(tab.answerstab.questions)].timelimit)
 		net.Start("metadmin.viewanswers")
 			net.WriteTable(tab)
 		net.Send(call)
@@ -679,21 +1002,78 @@ function metadmin.view_answers(call,sid,id)
 		metadmin.GetDataSID(sid,function() metadmin.view_answers(call,sid,id) end)
 	end
 end
-net.Receive("metadmin.answers", function(len, ply)
-	if not ply.anstoques then return end
-	local ans = net.ReadTable()
-	if metadmin.questions[ply.anstoques.idquestions].enabled == 0 then return end
-	local str = "Игрок "..ply:Nick().." ответил на вопросы теста за "..string.ToMinutesSeconds(os.time()-ply.anstoques.time).." минут. Его результат записан и вскоре будет проверен."
-	metadmin.Notify(false,Color(129,207,224),str)
-	metadmin.Log(str)
-	metadmin.AddTest(ply:SteamID(),ply.anstoques.idquestions,util.TableToJSON(ans),ply.anstoques.adminsid)
-	metadmin.GetTests(ply:SteamID(), function(data)
-		metadmin.players[ply:SteamID()].exam_answers = data
-	end)
-	ply.anstoques = false
+
+net.Receive("metadmin.viewblank", function(len, ply)
+	if not ULib.ucl.query(ply,"ma.viewresults") then return end
+	local open = net.ReadBool()
+	local target = net.ReadEntity()
+	if open then
+		if ply.viewblank then return end
+		if not target.anstoques then return end
+		ply.viewblank = target
+		local tab = {}
+		tab.questions = metadmin.questions[target.anstoques.idquestions].questions
+		tab.nick = target:Nick()
+		tab.sid = target:SteamID()
+		tab.starttime = target.anstoques.time
+		tab.timelimit = tonumber(metadmin.questions[target.anstoques.idquestions].timelimit)
+		tab.answers = target.anstoques.answers
+		net.Start("metadmin.viewblank")
+			net.WriteBool(false)
+			net.WriteTable(tab)
+			net.WriteEntity(target)
+		net.Send(ply)
+	else
+		ply.viewblank = nil
+	end
 end)
 
-hook.Add("PlayerSay", "XER", function(ply,text)
+hook.Add("PlayerDisconnected","MetAdmin",function(ply)
+	for k,v in pairs(player.GetAll()) do
+		if v.viewblank == ply then
+			v.viewblank = nil
+		end
+	end
+end)
+
+net.Receive("metadmin.answers", function(len, ply)
+	if not ply.anstoques then return end
+	local bool = net.ReadBool()
+	local ans = net.ReadTable()
+	if bool then
+		ply.anstoques.answers[ans[1]] = ans[2]
+		for k,v in pairs(player.GetAll()) do
+			if v.viewblank == ply then
+				net.Start("metadmin.viewblank")
+					net.WriteBool(false)
+					net.WriteTable({answers = ply.anstoques.answers})
+				net.Send(v)
+			end
+		end
+	else
+		if metadmin.questions[ply.anstoques.idquestions].enabled == 0 then return end
+		local time = (os.time()-ply.anstoques.time)
+		local str = "Игрок "..ply:Nick().." ответил на вопросы теста за "..string.ToMinutesSeconds(time).." минут. Его результат записан и вскоре будет проверен."
+		metadmin.Notify(false,Color(129,207,224),str)
+		metadmin.Log(str)
+		metadmin.AddTest(ply:SteamID(),ply.anstoques.idquestions,util.TableToJSON(ans),time,ply.anstoques.adminsid)
+		metadmin.GetTests(ply:SteamID(), function(data)
+			metadmin.players[ply:SteamID()].exam_answers = data
+		end)
+		for k,v in pairs(player.GetAll()) do
+			if v.viewblank == ply then
+				net.Start("metadmin.viewblank")
+					net.WriteBool(true)
+				net.Send(v)
+				v.viewblank = nil
+			end
+		end
+		ply.anstoques = false
+		ply:SetNWBool("anstoques",false)
+	end
+end)
+
+hook.Add("PlayerSay", "MetAdmin", function(ply,text)
 	if string.find(text,"Диспетчер",1) then
 		for k,v in pairs(player.GetAll()) do
 			if metadmin.disps[v:GetUserGroup()] then
@@ -704,9 +1084,8 @@ hook.Add("PlayerSay", "XER", function(ply,text)
 end )
 
 
-local badpl = true
 function metadmin.GetDataSID(sid,cb,nocreate)
-	if not string.match(sid,"(STEAM_[0-5]:[01]:%d+)") then return end
+	if not metadmin.IsValidSID(sid) then return end
 	metadmin.GetData(sid, function(data)
 		if data and data[1] then
 			if tonumber(data[1].synch) == 1 then
@@ -725,11 +1104,8 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 						metadmin.GetDataSID(sid,cb)
 						return
 					end
-					if metadmin.players[sid].badpl == "" then
-						metadmin.players[sid].badpl = false
-					end
-					if metadmin.players[sid].Nick == "" then
-						metadmin.players[sid].Nick = data[1].Nick
+					if metadmin.players[sid].nick == "" then
+						metadmin.players[sid].nick = data[1].nick
 					end
 					if data[1].synchgroup != metadmin.players[sid].rank then
 						metadmin.SetSynchGroup(sid,metadmin.players[sid].rank)
@@ -740,14 +1116,13 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 					end)
 					local target = player.GetBySteamID(sid)
 					if target then
-						if target:Nick() != metadmin.players[sid].Nick then
-							if not metadmin.players[sid].synch then
-								metadmin.UpdateNick(target)
-							end
-							metadmin.players[sid].Nick = target:Nick()
+						target:SetNWBool("Synch",true)
+						if target:Nick() != metadmin.players[sid].nick then
+							metadmin.players[sid].nick = target:Nick()
 						end
 						if target:GetUserGroup() != metadmin.players[sid].rank then
 							metadmin.setulxrank(target,metadmin.players[sid].rank)
+							spawn(target)
 						end
 					end
 				end)
@@ -759,7 +1134,7 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 					metadmin.players[sid].rank = "user"
 					metadmin.Log("Невозможно выдать ранг игроку "..sid.." | Такого ранга не существует!")
 				end
-				metadmin.players[sid].Nick = data[1].Nick
+				metadmin.players[sid].nick = data[1].nick
 				metadmin.players[sid].status = util.JSONToTable(data[1].status)
 				metadmin.GetViolations(sid, function(data)
 					metadmin.players[sid].violations = data
@@ -772,17 +1147,15 @@ function metadmin.GetDataSID(sid,cb,nocreate)
 				end)
 				local target = player.GetBySteamID(sid)
 				if target then
-					if target:Nick() != metadmin.players[sid].Nick then
-						if not metadmin.players[sid].synch then
-							metadmin.UpdateNick(target)
-						end
-						metadmin.players[sid].Nick = target:Nick()
+					target:SetNWBool("Synch",false)
+					if target:Nick() != metadmin.players[sid].nick then
+						metadmin.UpdateNick(target)
+						metadmin.players[sid].nick = target:Nick()
 					end
 					if target:GetUserGroup() != metadmin.players[sid].rank then
 						metadmin.setulxrank(target,metadmin.players[sid].rank)
 					end
 				end
-				http.Fetch("http://metrostroi.net/api/bad/"..sid,function(body,len,headers,code) metadmin.players[sid].badpl = body != "" and body or false end)
 				http.Fetch("http://metrostroi.net/api/icon/"..sid,function(body,len,headers,code) metadmin.players[sid].icon = tonumber(body) != "" and body or false end)
 			end
 			if cb then
@@ -807,3 +1180,36 @@ hook.Add('PlayerCanHearPlayersVoice', 'metadmin', function(listener,talker)
 		return false
 	end
 end)
+
+
+concommand.Add("metadmin.api_key", function(ply, cmd, args)
+	if IsValid(ply) then return end
+	if args and args[1] then
+		if args[1] != "" then
+			metadmin.api_key = args[1]
+			metadmin.print("Проверка АПИ ключа")
+			local time = os.time()
+			local hash = metadmin.sha256(GetConVar("hostport"):GetString()..tostring(time)..metadmin.api_key)
+			http.Post("http://metrostroi.net/api/key_check",{port=GetConVar("hostport"):GetString(),date=tostring(time),hash=hash},
+				function(body,len,headers,code)
+					if body != "ok" then
+						local str = "АПИ ключ не прошел проверку. ("..body..")"
+						metadmin.print(str,true)
+						metadmin.Log(str)
+						metadmin.api_key = false
+						SetGlobalBool("metadmin.partner",false)
+					else
+						SetGlobalBool("metadmin.partner",true)
+						metadmin.print("АПИ ключ прошел проверку.")
+						local setting_api = metadmin.GetSetting("api_key")
+						if setting_api then
+							metadmin.EditSetting("api_key",metadmin.api_key,1)
+						else
+							metadmin.AddSetting("api_key",metadmin.api_key,1)
+						end
+					end
+				end
+			)
+		end
+	end
+end )

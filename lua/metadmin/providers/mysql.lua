@@ -1,5 +1,4 @@
 require('mysqloo')
-
 local db = mysqloo.connect(metadmin.mysql.host, metadmin.mysql.user, metadmin.mysql.pass, metadmin.mysql.database, metadmin.mysql.port)
 
 function db:onConnected()
@@ -16,7 +15,7 @@ db:connect()
 metadmin.players = metadmin.players or {}
 
 function metadmin.GetData(sid,cb)
-    local q = db:query("SELECT * FROM players WHERE SID='"..db:escape(sid).."'")
+    local q = db:query("SELECT * FROM `ma_players` WHERE SID='"..db:escape(sid).."'")
     q.onSuccess = function(self, data)
 		cb(data)
     end
@@ -40,7 +39,7 @@ function metadmin.SaveData(sid)
 	if not metadmin.players[sid] then return end
 	local rank = metadmin.players[sid].rank or "user"
 	local status = util.TableToJSON(metadmin.players[sid].status)
-    local q = db:query("UPDATE `players` SET `group` = '"..rank.."',`status` = '"..status.."' WHERE `SID`='"..db:escape(sid).."'")
+    local q = db:query("UPDATE `ma_players` SET `group` = '"..rank.."',`status` = '"..status.."' WHERE `SID`='"..db:escape(sid).."'")
      
     function q:onSuccess()
 		print("Saved")
@@ -64,7 +63,7 @@ end
 function metadmin.UpdateNick(ply)
 	local sid = ply:SteamID()
 	if not metadmin.players[sid] then return end
-	local q = db:query("UPDATE `players` SET `Nick` = '"..db:escape(ply:Nick()).."' WHERE `SID`='"..sid.."'")
+	local q = db:query("UPDATE `ma_players` SET `nick` = '"..db:escape(ply:Nick()).."' WHERE `SID`='"..sid.."'")
     function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -82,7 +81,7 @@ end
 
 function metadmin.OnOffSynch(sid,on)
 	if not metadmin.players[sid] or not isnumber(on) then return end
-	local q = db:query("UPDATE `players` SET `synch` = "..on.." WHERE `SID`='"..sid.."'")
+	local q = db:query("UPDATE `ma_players` SET `synch` = "..on.." WHERE `SID`='"..sid.."'")
     function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -100,7 +99,7 @@ end
 
 
 function metadmin.SetSynchGroup(sid,rank)
-	local q = db:query("UPDATE `players` SET `synchgroup` = '"..db:escape(rank).."' WHERE `SID`='"..sid.."'")
+	local q = db:query("UPDATE `ma_players` SET `synchgroup` = '"..db:escape(rank).."' WHERE `SID`='"..sid.."'")
     function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -131,6 +130,7 @@ function metadmin.CreateData(sid)
 	end
 	metadmin.players[sid] = {}
 	metadmin.players[sid].rank = group
+	metadmin.players[sid].nick = Nick
 	metadmin.players[sid].status = {}
 	metadmin.players[sid].status.nom = 1
 	metadmin.players[sid].status.admin = ""
@@ -138,7 +138,7 @@ function metadmin.CreateData(sid)
 	metadmin.players[sid].violations = {}
 	metadmin.players[sid].exam = {}
 	metadmin.players[sid].exam_answers = {}
-	local q = db:query("INSERT INTO `players` (`SID`,`group`,`status`,`Nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..db:escape(Nick).."')")
+	local q = db:query("INSERT INTO `ma_players` (`SID`,`group`,`status`,`nick`) VALUES ('"..sid.."','"..group.."','"..status.."','"..db:escape(Nick).."')")
     function q:onError(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -152,10 +152,14 @@ function metadmin.CreateData(sid)
     end
      
     q:start()
+	if metadmin.synch then
+		metadmin.OnOffSynch(sid,1)
+		metadmin.GetDataSID(sid)
+	end
 end
 
 function metadmin.GetQuestions(cb)
-    local q = db:query("SELECT * FROM questions")
+    local q = db:query("SELECT * FROM ma_questions")
     q.onSuccess = function(self, data)
 		cb(data)
     end
@@ -185,7 +189,7 @@ function metadmin.SaveQuestion(id,questions,enabled)
 		enb = "`enabled` = '"..enabled.."'"
 		if questions then questions = questions.."," end
 	end
-	local q = db:query("UPDATE `questions` SET "..table..enb.." WHERE `id`='"..id.."'")
+	local q = db:query("UPDATE `ma_questions` SET "..table..enb.." WHERE `id`='"..id.."'")
 	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -202,7 +206,24 @@ function metadmin.SaveQuestion(id,questions,enabled)
 end
 
 function metadmin.SaveQuestionName(id,name)
-	local q = db:query("UPDATE `questions` SET `name` = '"..name.."' WHERE `id`='"..id.."'")
+	local q = db:query("UPDATE `ma_questions` SET `name` = '"..name.."' WHERE `id`='"..id.."'")
+	q.onError = function(_, err, sql)
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            db:connect()
+            db:wait()
+        if db:status() ~= mysqloo.DATABASE_CONNECTED then
+            ErrorNoHalt("Переподключение не удалось.")
+            return
+            end
+        end
+        MsgN('MySQL: Ошибка запроса: ' .. err .. ' (' .. sql .. ')')
+    end
+	
+    q:start()
+end
+
+function metadmin.SaveQuestionRecTime(id,time)
+	local q = db:query("UPDATE `ma_questions` SET `timelimit` = '"..tonumber(time).."' WHERE `id`='"..id.."'")
 	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -219,7 +240,7 @@ function metadmin.SaveQuestionName(id,name)
 end
 
 function metadmin.RemoveQuestion(id)
-	local q = db:query("DELETE FROM `questions` WHERE `id`='"..id.."'")
+	local q = db:query("DELETE FROM `ma_questions` WHERE `id`='"..id.."'")
 	q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -236,7 +257,7 @@ function metadmin.RemoveQuestion(id)
 end
 
 function metadmin.AddQuestion(name)
-    local q = db:query("INSERT INTO `questions` (`name`,`questions`,`enabled`) VALUES ('"..db:escape(name).."','{}','0')")
+    local q = db:query("INSERT INTO `ma_questions` (`name`,`questions`,`enabled`) VALUES ('"..db:escape(name).."','{}','0')")
   q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -253,7 +274,7 @@ function metadmin.AddQuestion(name)
 end
 
 function metadmin.GetTests(sid,cb)
-    local q = db:query("SELECT * FROM answers WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
+    local q = db:query("SELECT * FROM ma_answers WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
     q.onSuccess = function(self, data)
 		cb(data)
     end
@@ -272,8 +293,8 @@ function metadmin.GetTests(sid,cb)
 	q:start()
 end
 
-function metadmin.AddTest(sid,ques,ans,adminsid)
-    local q = db:query("INSERT INTO `answers` (`sid`,`date`,`questions`,`answers`,`answers`) VALUES ('"..sid.."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."','"..sid.."')")
+function metadmin.AddTest(sid,ques,ans,time,adminsid)
+    local q = db:query("INSERT INTO `ma_answers` (`SID`,`date`,`questions`,`answers`,`admin`,`time`,`ssadmin`) VALUES ('"..sid.."','"..os.time().."','"..tonumber(ques).."','"..db:escape(ans).."','"..adminsid.."','"..tonumber(time).."','')")
   q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -290,7 +311,7 @@ function metadmin.AddTest(sid,ques,ans,adminsid)
 end
 
 function metadmin.SetStatusTest(id,status,ssadmin)
-    local q = db:query("UPDATE `answers` SET `status` = '"..status.."',`ssadmin` = '"..ssadmin.."' WHERE `id`='"..tonumber(id).."'")
+    local q = db:query("UPDATE `ma_answers` SET `status` = '"..status.."',`ssadmin` = '"..ssadmin.."' WHERE `id`='"..tonumber(id).."'")
   q.onError = function(_, err, sql)
         if db:status() ~= mysqloo.DATABASE_CONNECTED then
             db:connect()
@@ -307,7 +328,7 @@ function metadmin.SetStatusTest(id,status,ssadmin)
 end
 
 function metadmin.GetViolations(sid,cb)
-	local q = db:query("SELECT * FROM  `violations` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
+	local q = db:query("SELECT * FROM  `ma_violations` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
 	end
@@ -327,7 +348,7 @@ end
 
 function metadmin.AddViolation(sid,adminsid,violation)
 	if not adminsid then adminsid = "CONSOLE" end
-	local q = db:query("INSERT INTO `violations` (`SID`,`date`,`admin`,`server`,`violation`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..adminsid.."','"..db:escape(metadmin.server).."','"..db:escape(violation).."')")
+	local q = db:query("INSERT INTO `ma_violations` (`SID`,`date`,`admin`,`server`,`violation`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..adminsid.."','"..db:escape(metadmin.server).."','"..db:escape(violation).."')")
 	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
@@ -343,7 +364,7 @@ function metadmin.AddViolation(sid,adminsid,violation)
 end
 
 function metadmin.RemoveViolation(id)
-	local q = db:query("DELETE FROM `violations` WHERE `id`='"..id.."'")
+	local q = db:query("DELETE FROM `ma_violations` WHERE `id`='"..id.."'")
 	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
@@ -359,7 +380,7 @@ function metadmin.RemoveViolation(id)
 end
 
 function metadmin.GetExamInfo(sid,cb)
-	local q = db:query("SELECT * FROM  `examinfo` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
+	local q = db:query("SELECT * FROM  `ma_examinfo` WHERE SID='"..db:escape(sid).."' ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
 	end
@@ -377,7 +398,7 @@ function metadmin.GetExamInfo(sid,cb)
 	q:start()
 end
 function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
-	local q = db:query("INSERT INTO `examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..rank.."','"..adminsid.."','"..db:escape(note).."','"..type.."','"..db:escape(metadmin.server).."')")
+	local q = db:query("INSERT INTO `ma_examinfo` (`SID`,`date`,`rank`,`examiner`,`note`,`type`,`server`) VALUES ('"..db:escape(sid).."','"..os.time().."','"..rank.."','"..adminsid.."','"..db:escape(note).."','"..type.."','"..db:escape(metadmin.server).."')")
 	q.onError = function(_, err, sql)
 		if db:status() ~= mysqloo.DATABASE_CONNECTED then
 			db:connect()
@@ -393,7 +414,7 @@ function metadmin.AddExamInfo(sid,rank,adminsid,note,type)
 end
 
 function metadmin.AllPlayers(group,cb)
-	local q = db:query("SELECT SID,Nick FROM `players` WHERE `synchgroup`='"..group.."' OR (`group`='"..group.."' AND `synchgroup`='') ORDER BY id DESC")
+	local q = db:query("SELECT SID, nick FROM `ma_players` WHERE `synchgroup`='"..group.."' OR (`group`='"..group.."' AND `synchgroup`='') ORDER BY id DESC")
 	q.onSuccess = function(self, data)
 		cb(data)
 	end

@@ -1,16 +1,97 @@
-metadmin = metadmin or {}
-metadmin.category = "MetAdmin" -- Категория в ulx
 net.Receive("metadmin.settings", function()
 	local tab = net.ReadTable()
 	for k,v in pairs(tab) do
 		metadmin[k] = v
 	end
 end)
+net.Receive("metadmin.settings.mysql", function()
+	local tab = net.ReadTable()
+	local Frame = vgui.Create("DFrame")
+	Frame:SetSize(225,195)
+	Frame:SetTitle("Настройки MySQL")
+	Frame:SetDraggable(true)
+	Frame:Center()
+	Frame:MakePopup()
+	Frame.btnMaxim:SetVisible(false)
+	Frame.btnMinim:SetVisible(false)
+	local DPanel = vgui.Create("DPanel",Frame)
+	DPanel:SetPos(5,30)
+	DPanel:SetSize(215,160)
+	DLabel:SetDark(1)
+
+	local hosttext = vgui.Create("DLabel",DPanel)
+	hosttext:SetPos(5,10)
+	hosttext:SetText("HOST:")
+	hosttext:SizeToContents()
+	local host = vgui.Create("DTextEntry",DPanel)
+	host:SetPos(70,5)
+	host:SetSize(140,20)
+	host:SetText(tab.host)
+	
+	local dbtext = vgui.Create("DLabel",DPanel)
+	dbtext:SetPos(5,35)
+	dbtext:SetText("DATABASE:")
+	dbtext:SizeToContents()
+	local db = vgui.Create("DTextEntry",DPanel)
+	db:SetPos(70,30)
+	db:SetSize(140,20)
+	db:SetText(tab.database)
+	
+	local porttext = vgui.Create("DLabel",DPanel)
+	porttext:SetPos(5,60)
+	porttext:SetText("PORT:")
+	porttext:SizeToContents()
+	local port = vgui.Create("DTextEntry",DPanel)
+	port:SetPos(70,55)
+	port:SetSize(140,20)
+	port:SetText(tab.port)
+	
+	local usertext = vgui.Create("DLabel",DPanel)
+	usertext:SetPos(5,85)
+	usertext:SetText("USER:")
+	usertext:SizeToContents()
+	local user = vgui.Create("DTextEntry",DPanel)
+	user:SetPos(70,80)
+	user:SetSize(140,20)
+	user:SetText(tab.user)
+	
+	local passwordtext = vgui.Create("DLabel",DPanel)
+	passwordtext:SetPos(5,110)
+	passwordtext:SetText("PASSWORD:")
+	passwordtext:SizeToContents()
+	local password = vgui.Create("DTextEntry",DPanel)
+	password:SetPos(70,105)
+	password:SetSize(140,20)
+	password:SetToolTip("Пароль всегда будет пустым для клиента")
+	
+	local save = vgui.Create("DButton",DPanel)
+	save:SetPos(5,135)
+	save:SetText("Сохранить")
+	save:SetSize(205,20)
+	save.DoClick = function()
+		local tab2 = {}
+		local n = 0
+		tab["pass"] = ""
+		for k,v in pairs({["host"]=host:GetValue(),["database"]=db:GetValue(),["pass"]=password:GetValue(),["user"]=user:GetValue(),["port"]=tonumber(port:GetValue())}) do
+			if tab[k] != v then tab2[k] = v n = n+1 end
+		end
+		if n > 0 then
+			if metadmin.provider == "mysql" then
+				Derma_Message("Чтобы изменения вступили в силу, нужно перезагрузить сервер.","Предупреждение","Ок")
+			end
+			net.Start("metadmin.settings.mysql")
+				net.WriteBool(false)
+				net.WriteTable(tab2)
+			net.SendToServer()
+			Frame:Close()
+		end
+	end
+end)
 net.Receive("metadmin.profile", function()
 	metadmin.profile(net.ReadTable())
 end)
 net.Receive("metadmin.questions", function()
-	metadmin.question(net.ReadTable())
+	metadmin.question(net.ReadTable(),net.ReadInt(20))
 end)
 net.Receive("metadmin.viewanswers", function()
 	metadmin.viewanswers(net.ReadTable())
@@ -22,15 +103,6 @@ end)
 net.Receive("metadmin.notify", function()
   chat.AddText(unpack(net.ReadTable()))
 end)
-net.Receive("metadmin.trserver", function()
-	if net.ReadBool() then
-		local frame = Derma_Message("Этот сервер находится в списке доверенных серверов.","Предупреждение","Хорошо")
-		frame:SetIcon("icon16/accept.png")
-	else
-		local frame = Derma_Message("Этот сервер не находится в списке доверенных серверов.","Предупреждение","Хорошо")
-		frame:SetIcon("icon16/cross.png")
-	end
-end)
 CreateClientConVar("metadmin_preview",1,true,false)
 local buttonmenu = CreateClientConVar("metadmin_buttonmenu","F4",true,false)
 
@@ -38,6 +110,7 @@ local function Access(permis)
 	return ULib.ucl.query(LocalPlayer(),permis)
 end
 
+local menuopen = false
 function metadmin.menu()
 	local tabs = vgui.Create("DPropertySheet")
 	tabs:SetPos(0,0)
@@ -76,7 +149,7 @@ function metadmin.menu()
 					end)
 					row:SetTextInset(10,0)
 				end
-		if Access("ma.starttest") then
+		if Access("ma.starttest") and LocalPlayer() != line.ply and not line.ply:GetNWBool("anstoques") then
 			local sub, row = menu:AddSubMenu("Начать тест")
 			for k,v in pairs(metadmin.questions) do
 				if v.enabled == 1 then
@@ -96,7 +169,17 @@ function metadmin.menu()
 				end
 			end
 			row:SetIcon("icon16/help.png")
-		end	
+		end
+		if Access("ma.viewresults") and line.ply:GetNWBool("anstoques") then
+			local row = menu:AddOption("Просмотреть бланк", function()
+				net.Start("metadmin.viewblank")
+					net.WriteBool(true)
+					net.WriteEntity(line.ply)
+				net.SendToServer()
+				tabs:Remove()
+			end)
+			row:SetIcon("icon16/help.png")
+		end
 		local row = menu:AddOption("Отмена")
 		row:SetIcon("icon16/cancel.png")
 			
@@ -201,6 +284,7 @@ function metadmin.menu()
 	
 	tabs.OnRemove = function()
 		metadmin.allplayers = nil
+		menuopen = false
 	end
 end
 net.Receive("metadmin.allplayers", function()
@@ -226,6 +310,7 @@ function metadmin.settings()
 	serversettings:SetPos(70,2.5)
 	serversettings:SetText("Настройки сервера")
 	serversettings:SetSize(110,20)
+	serversettings:SetEnabled(Access("ma.settings"))
 	serversettings.DoClick = function() metadmin.serversettings() Frame:Close() end
 	local DPanel = vgui.Create("DPanel",Frame)
 	DPanel:SetPos(5,30)
@@ -255,7 +340,7 @@ end
 function metadmin.serversettings()
 	if not Access("ma.settings") then return end
 	local Frame = vgui.Create("DFrame")
-	Frame:SetSize(250,200)
+	Frame:SetSize(250,225)
 	Frame:SetTitle("Настройки сервера")
 	Frame:SetDraggable(true)
 	Frame.btnMaxim:SetVisible(false)
@@ -264,24 +349,33 @@ function metadmin.serversettings()
 	Frame:Center()
 	local DPanel = vgui.Create("DPanel",Frame)
 	DPanel:SetPos(5,30)
-	DPanel:SetSize(240,165)
+	DPanel:SetSize(240,190)
 	DLabel:SetDark(1)
 	
-	local synch = vgui.Create("DCheckBoxLabel",Frame)
-	synch:SetPos(10,35)
-	synch:SetText("Синхронизация")
-	synch:SetDisabled(true)
-	synch.Button.DoClick = function(self)
+	local provider = vgui.Create("DComboBox",Frame)
+	provider:SetPos(10,35)
+	provider:SetSize(105,20)
+	provider:SetValue(metadmin.provider)
+	provider:AddChoice("sql")
+	provider:AddChoice("mysql")
+	provider.OnSelect = function(self,index,value)
+		Derma_Message("Чтобы изменения вступили в силу, нужно перезагрузить сервер.","Предупреждение","Ок")
+		net.Start("metadmin.settings")
+			net.WriteTable({provider=value})
+		net.SendToServer()
 	end
-	synch:SizeToContents()
 	
-	local badpl = vgui.Create("DCheckBoxLabel",Frame)
-	badpl:SetPos(135,35)
-	badpl:SetText("'Плохие' игроки")
-	badpl:SetDisabled(true)
-	badpl.Button.DoClick = function(self)
+	local mysqlsettings = vgui.Create("DButton",Frame)
+	mysqlsettings:SetPos(135,35)
+	mysqlsettings:SetSize(105,20)
+	mysqlsettings:SetText("Настройки MySQL")
+	mysqlsettings.DoClick = function()
+		Frame:Close()
+		net.Start("metadmin.settings.mysql")
+			net.WriteBool(true)
+		net.SendToServer()
 	end
-	badpl:SizeToContents()
+	
 	
 	local groupwrite = vgui.Create("DCheckBoxLabel",Frame)
 	groupwrite:SetPos(135,60)
@@ -294,6 +388,18 @@ function metadmin.serversettings()
 		net.SendToServer()
 	end
 	groupwrite:SizeToContents()
+	
+	local MAG = vgui.Create("DCheckBoxLabel",Frame)
+	MAG:SetPos(135,85)
+	MAG:SetText("MAG")
+	MAG:SetChecked(metadmin.MAGEnabled)
+	MAG:SetToolTip("Metrostroi Anti-Grief\nБлокирует вход игрокам, которые мешают игре")
+	MAG.OnChange = function(self, value)
+		net.Start("metadmin.settings")
+			net.WriteTable({MAGEnabled=value})
+		net.SendToServer()
+	end
+	MAG:SizeToContents()
 	
 	local showserver = vgui.Create("DCheckBoxLabel",Frame)
 	showserver:SetPos(10,60)
@@ -319,8 +425,20 @@ function metadmin.serversettings()
 	end
 	voice:SizeToContents()
 	
+	local synch = vgui.Create("DCheckBoxLabel",Frame)
+	synch:SetPos(10,110)
+	synch:SetText("Синронизация")
+	synch:SetChecked(metadmin.synch)
+	synch:SetToolTip("При первом подключении к серверу, игрок автоматически синхронизируется с сайтом")
+	synch.OnChange = function(self, value)
+		net.Start("metadmin.settings")
+			net.WriteTable({synch=value})
+		net.SendToServer()
+	end
+	synch:SizeToContents()
+	
 	local server = vgui.Create("DButton",Frame)
-	server:SetPos(10,115)
+	server:SetPos(10,140)
 	server:SetSize(105,20)
 	server:SetText("Имя сервера")
 	server.DoClick = function()
@@ -349,7 +467,7 @@ function metadmin.serversettings()
 	end
 	
 	local disps = vgui.Create("DButton",Frame)
-	disps:SetPos(135,115)
+	disps:SetPos(135,140)
 	disps:SetText("Диспетчеры")
 	disps:SetSize(105,20)
 	disps.DoClick = function()
@@ -443,7 +561,7 @@ function metadmin.serversettings()
 	end
 	
 	local ranks = vgui.Create("DButton",Frame)
-	ranks:SetPos(10,145)
+	ranks:SetPos(10,170)
 	ranks:SetText("Ранги")
 	ranks:SetSize(70,20)
 	ranks.DoClick = function()
@@ -544,7 +662,7 @@ function metadmin.serversettings()
 	end
 	
 	local prom = vgui.Create("DButton",Frame)
-	prom:SetPos(90,145)
+	prom:SetPos(90,170)
 	prom:SetText("Повышения")
 	prom:SetSize(70,20)
 	prom.DoClick = function()
@@ -645,7 +763,7 @@ function metadmin.serversettings()
 	end
 	
 	local dem = vgui.Create("DButton",Frame)
-	dem:SetPos(170,145)
+	dem:SetPos(170,170)
 	dem:SetText("Понижения")
 	dem:SetSize(70,20)
 	dem.DoClick = function()
@@ -746,7 +864,7 @@ function metadmin.serversettings()
 	end
 	
 	local plombs = vgui.Create("DButton",Frame)
-	plombs:SetPos(10,170)
+	plombs:SetPos(10,195)
 	plombs:SetText("Пломбы")
 	plombs:SetSize(110,20)
 	plombs.DoClick = function()
@@ -846,7 +964,7 @@ function metadmin.serversettings()
 		end
 	end
 	local pogona = vgui.Create("DButton",Frame)
-	pogona:SetPos(130,170)
+	pogona:SetPos(130,195)
 	pogona:SetText("Погоны")
 	pogona:SetSize(110,20)
 	pogona.DoClick = function()
@@ -947,13 +1065,12 @@ function metadmin.serversettings()
 	end
 end
 
-local opentime = 0
-hook.Add("Think","exammenu",function()
+hook.Add("Think","MetAdmin.Menu",function()
 	if not Access("ma.pl") then return end
-	if CurTime() < opentime then return end
+	if menuopen then return end
     if input.IsKeyDown(buttons[buttonmenu:GetString()]) then
       metadmin.menu()
-	  opentime = CurTime() + 2.5
+	  menuopen = true
 	end
 end)
 
@@ -962,7 +1079,7 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 	if IsValid(menu) then menu:Remove() end
 	menu = DermaMenu()
 	local row
-	if not synch then
+	if (not synch or (synch and GetGlobalBool("metadmin.partner",false) and LocalPlayer():GetNWBool("Synch"))) then
 		if Access("ma.violationgive") then
 			row = menu:AddOption("Добавить нарушение", function()
 				local frame = vgui.Create("DFrame")
@@ -989,7 +1106,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 						net.WriteString(text:GetValue())
 					net.SendToServer()
 					frame:Close()
-					RunConsoleCommand("ulx","prid",sid)
+					if not synch then
+						RunConsoleCommand("ulx","prid",sid)
+					end
 				end
 				Frame:Close()
 			end)
@@ -1002,7 +1121,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 					net.WriteInt(7,5)
 				net.SendToServer()
 				Frame:Close()
-				RunConsoleCommand("ulx","prid",sid)
+				if not synch then
+					RunConsoleCommand("ulx","prid",sid)
+				end
 			end)
 			row:SetIcon("icon16/tag_blue_add.png")
 		end
@@ -1023,7 +1144,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 						net.WriteString(text:GetValue())
 					net.SendToServer()
 					frame2:Close()
-					RunConsoleCommand("ulx","prid",sid)
+					if not synch then
+						RunConsoleCommand("ulx","prid",sid)
+					end
 				end
 				text:RequestFocus()
 				frame2:MakePopup()
@@ -1048,7 +1171,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 						net.WriteString(text:GetValue())
 					net.SendToServer()
 					frame2:Close()
-					RunConsoleCommand("ulx","prid",sid)
+					if not synch then
+						RunConsoleCommand("ulx","prid",sid)
+					end
 				end
 				text:RequestFocus()
 				frame2:MakePopup()
@@ -1073,7 +1198,9 @@ function metadmin.playeract(nick,sid,rank,synch,Frame)
 						net.WriteString(text:GetValue())
 					net.SendToServer()
 					frame2:Close()
-					RunConsoleCommand("ulx","prid",sid)
+					if not synch then
+						RunConsoleCommand("ulx","prid",sid)
+					end
 				end
 				text:RequestFocus()
 				frame2:MakePopup()
@@ -1212,29 +1339,19 @@ local icons = {
 	[1] = "Заслуженный игрок",
 	[2] = "Доверенный игрок",
 	[3] = "Владелец партнерского сервера",
+	[6] = "Владелец партнерских серверов",
 	
-	[10] = "Редактор системы",
+	[9] = "Пресс-служба",
+	[10] = "Модератор системы",
 	[11] = "Разработчик системы",
 	[12] = "Разработчик мода",
 }
-local badplok = {}
+
 function metadmin.profile(tab)
-	if tab.badpl and not badplok[tab.SID] then
-		local badpl = string.Explode("|",tab.badpl)
-		local frame = Derma_Message("Этот игрок был отмечен 'плохим' в системе.\nПричина: "..badpl[1].."\nАдмин.: "..badpl[2],"Предупреждение","Ок")
-		local hided = vgui.Create("DCheckBoxLabel",frame)
-		hided:SetSize(100,20)
-		hided:SetPos(165,5)
-		hided:SetText("Не показывать")
-		hided:SetValue(badplok[tab.SID] or 0)
-		function hided:OnChange(val)
-			badplok[tab.SID] = val
-		end
-	end
 	local creatabs = (tab.violations or tab.exam or tab.exam_answers or tab.status)
 	local Frame = vgui.Create("DFrame")
 	Frame:SetSize(600,creatabs and 500 or 115)
-	Frame:SetTitle("Профиль "..tab.Nick.." ("..tab.SID..")")
+	Frame:SetTitle("Профиль "..tab.nick.." ("..tab.SID..")")
 	Frame.btnMaxim:SetVisible(false)
 	Frame.btnMinim:SetVisible(false)
 	Frame:SetDraggable(true)
@@ -1252,20 +1369,19 @@ function metadmin.profile(tab)
 		actions:SetText("Действия")
 		actions:SetSize(60,18)
 		actions.DoClick = function()
-			metadmin.playeract(tab.Nick,tab.SID,tab.rank,tab.synch,Frame)
+			metadmin.playeract(tab.nick,tab.SID,tab.rank,tab.synch,Frame)
 		end
+		pos = pos-60
 	end
-	pos = pos - 80
+	pos = pos-20
 	local report = vgui.Create("DButton",Frame)
 	report:SetPos(pos,3)
 	report:SetText("Пожаловаться")
 	report:SetSize(80,18)
-	report:SetDisabled(true)
-	report:SetToolTip("Скоро будет")
 	report.DoClick = function()
 		local frame = vgui.Create("DFrame")
 		frame:SetSize(585,140)
-		frame:SetTitle("Жалоба на "..tab.Nick)
+		frame:SetTitle("Жалоба на "..tab.nick)
 		frame:SetDraggable(true)
 		frame:Center()
 		frame:MakePopup()
@@ -1282,7 +1398,7 @@ function metadmin.profile(tab)
 		send:SetSize(575,20)
 		send.DoClick = function()
 			net.Start("metadmin.report")
-				net.WriteTable({SID = tab.SID,report = text:GetValue()})
+				net.WriteTable({SID = tab.SID,reason = text:GetValue()})
 			net.SendToServer()
 			frame:Close()
 		end
@@ -1342,7 +1458,7 @@ function metadmin.profile(tab)
 	end
 	local nick = vgui.Create("DLabel",DPanel)
 	nick:SetPos(75,5)
-	nick:SetText("Ник: "..tab.Nick)
+	nick:SetText("Ник: "..tab.nick)
 	nick:SizeToContents()
 	tab.icon = tonumber(tab.icon)
 	if tab.icon and tab.icon != 0 and icons[tab.icon] then
@@ -1594,7 +1710,7 @@ function metadmin.profile(tab)
 			draw.SimpleText(GetHostName(), "ma.font1", w/2, 20, Color(50,50,50), TEXT_ALIGN_CENTER)
 			draw.SimpleText("ТАЛОН ПРЕДУПРЕЖДЕНИЯ №"..tab.status.nom, "ma.font2", w/2, 55, Color(50,50,50), TEXT_ALIGN_CENTER)
 			draw.SimpleText("Машиниста, помощника машиниста", "ma.font3", w/2, 90, Color(50,50,50), TEXT_ALIGN_CENTER)
-			draw.SimpleText(tab.Nick, "ma.font4", w/2, 120, Color(50,50,50), TEXT_ALIGN_CENTER)
+			draw.SimpleText(tab.nick, "ma.font4", w/2, 120, Color(50,50,50), TEXT_ALIGN_CENTER)
 			draw.SimpleText(tab.SID, "ma.font4", w/2, 140, Color(50,50,50), TEXT_ALIGN_CENTER)
 			draw.SimpleText("Выдан: "..os.date( "%X - %d/%m/%Y" ,tab.status.date), "ma.font5", w/2, 180, Color(50,50,50), TEXT_ALIGN_CENTER)
 			draw.SimpleText(tab.status.admin, "ma.font5", w/2, 200, Color(50,50,50), TEXT_ALIGN_CENTER)
@@ -1616,17 +1732,13 @@ function metadmin.profilesite(sid)
 		end
 		local target = player.GetBySteamID(sid)
 		if target then
-			if target:Nick() != tab.Nick then
-				tab.Nick = target:Nick()
+			if target:Nick() != tab.nick then
+				tab.nick = target:Nick()
 			end
-		end
-		if tab.badpl != "" then
-			local badpl = string.Explode("|",tab.badpl)
-			Derma_Message("Этот игрок был отмечен 'плохим' в системе.\nПричина: "..badpl[1].."\nАдмин.: "..badpl[2],"Предупреждение","Ок")
 		end
 		local Frame = vgui.Create("DFrame")
 		Frame:SetSize(600,500)
-		Frame:SetTitle("Профиль "..tab.Nick.." ("..sid..")")
+		Frame:SetTitle("Профиль "..tab.nick.." ("..sid..")")
 		Frame.btnMaxim:SetVisible(false)
 		Frame.btnMinim:SetVisible(false)
 		Frame:SetDraggable(true)
@@ -1640,7 +1752,7 @@ function metadmin.profilesite(sid)
 	
 		local nick = vgui.Create("DLabel",DPanel)
 		nick:SetPos(75,5)
-		nick:SetText("Ник: "..tab.Nick)
+		nick:SetText("Ник: "..tab.nick)
 		nick:SizeToContents()
 		if tab.icon and tab.icon != 0 and icons[tab.icon] then
 			local y,x = nick:GetSize()
@@ -1782,7 +1894,7 @@ function metadmin.profilesite(sid)
 				draw.SimpleText(GetHostName(), "ma.font1", w/2, 20, Color(50,50,50), TEXT_ALIGN_CENTER)
 				draw.SimpleText("ТАЛОН ПРЕДУПРЕЖДЕНИЯ №"..tab.status.nom, "ma.font2", w/2, 55, Color(50,50,50), TEXT_ALIGN_CENTER)
 				draw.SimpleText("Машиниста, помощника машиниста", "ma.font3", w/2, 90, Color(50,50,50), TEXT_ALIGN_CENTER)
-				draw.SimpleText(tab.Nick, "ma.font4", w/2, 120, Color(50,50,50), TEXT_ALIGN_CENTER)
+				draw.SimpleText(tab.nick, "ma.font4", w/2, 120, Color(50,50,50), TEXT_ALIGN_CENTER)
 				draw.SimpleText(sid, "ma.font4", w/2, 140, Color(50,50,50), TEXT_ALIGN_CENTER)
 				draw.SimpleText("Выдан: "..os.date( "%X - %d/%m/%Y" ,tab.status.date), "ma.font5", w/2, 180, Color(50,50,50), TEXT_ALIGN_CENTER)
 				draw.SimpleText(tab.status.admin, "ma.font5", w/2, 200, Color(50,50,50), TEXT_ALIGN_CENTER)
@@ -1832,7 +1944,7 @@ function metadmin.questionslist()
 				local row = sub:AddOption("Имя", function()
 					local frame = vgui.Create("DFrame")
 					frame:SetSize(150,75)
-					frame:SetTitle("Название сервера")
+					frame:SetTitle("Название шаблона")
 					frame:SetDraggable(true)
 					frame:Center()
 					frame:MakePopup()
@@ -1850,6 +1962,36 @@ function metadmin.questionslist()
 					send.DoClick = function()
 						net.Start("metadmin.qaction")
 							net.WriteInt(5,5)
+							net.WriteInt(id,32)
+							net.WriteString(text:GetValue())
+						net.SendToServer()
+						frame:Close()
+					end
+					Frame:Close()
+				end)
+				row:SetTextInset(10,0)
+				local timelimit = line.timelimit
+				local row = sub:AddOption("Реком. время", function()
+					local frame = vgui.Create("DFrame")
+					frame:SetSize(150,75)
+					frame:SetTitle("Реком. время(секунды)")
+					frame:SetDraggable(true)
+					frame:Center()
+					frame:MakePopup()
+					frame.btnMaxim:SetVisible(false)
+					frame.btnMinim:SetVisible(false)
+					local text = vgui.Create("DTextEntry",frame)
+					text:SetPos(5,30)
+					text:SetSize(140,20)
+					text:SetText(timelimit)
+					local send = vgui.Create("DButton",frame)
+					send:SetPos(5,50)
+					send:SetText("Сохранить")
+					send:SetSize(140,20)
+					local id = line.id
+					send.DoClick = function()
+						net.Start("metadmin.qaction")
+							net.WriteInt(6,5)
 							net.WriteInt(id,32)
 							net.WriteString(text:GetValue())
 						net.SendToServer()
@@ -1912,6 +2054,7 @@ function metadmin.questionslist()
 	for k,v in pairs(metadmin.questions) do
 		local line = questionlist:AddLine(v.name)
 		line.id = k
+		line.timelimit = v.timelimit
 		line.enabled = v.enabled
 		line.Paint = function(self,w,h)
 			surface.SetDrawColor(v.enabled==1 and Color(0,255,0,200) or Color(160,160,160,200))
@@ -1945,7 +2088,9 @@ function metadmin.questionsadd()
 	frame2:MakePopup()
 end
 
-function metadmin.question(tab)
+function metadmin.question(tab,timelimit)
+	if timelimit == 0 then timelimit = false end
+	local starttime = os.time()
 	local answer = {}
 	local maxn = #tab
 	local Frame = vgui.Create("DFrame")
@@ -1956,6 +2101,28 @@ function metadmin.question(tab)
 	Frame:Center()
 	Frame:MakePopup()
 	Frame:SetRenderInScreenshots(false)
+	local time = vgui.Create("DLabel",Frame)
+	time:SetSize(115,20)
+	time:SetPos(342,2)
+	time.UpdateColours = function( label, skin )
+		label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+	end
+	time.Think = function(self)
+		local time = (os.time()-starttime)
+		if timelimit and time > timelimit then
+			self:SetColor(Color(255,0,0))
+		end
+		self:SetText("Текущее время: "..string.ToMinutesSeconds(time))
+	end
+	if timelimit then
+		local recomtime = vgui.Create("DLabel",Frame)
+		recomtime:SetSize(150,20)
+		recomtime:SetPos(645,2)
+		recomtime.UpdateColours = function( label, skin )
+			label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+		end
+		recomtime:SetText("Рекомендуемое время: "..string.ToMinutesSeconds(timelimit))
+	end
 	local DScrollPanel = vgui.Create("DScrollPanel",Frame)
 	DScrollPanel:SetSize(790,math.min(540,60+40*maxn))
 	DScrollPanel:SetPos(1,25)
@@ -1968,7 +2135,7 @@ function metadmin.question(tab)
 		local question = vgui.Create("DLabel",DPanel)
 		question:SetSize(760,20)
 		question:SetPos(5,5+num*40)
-		question:SetText((isstring(v) and v or v.question)..":")
+		question:SetText((isstring(v) and v or v.question)..": ")
 		if istable(v) then
 			answer[k] = vgui.Create("DComboBox",DPanel)
 			answer[k]:SetColor(color_black)
@@ -1981,6 +2148,12 @@ function metadmin.question(tab)
 			answer[k] = vgui.Create("DTextEntry",DPanel)
 			answer[k]:SetPos(5,25+num*40)
 			answer[k]:SetSize(760,20)
+			answer[k].OnTextChanged = function(self)
+				net.Start("metadmin.answers")
+					net.WriteBool(true)
+					net.WriteTable({k,self:GetValue()})
+				net.SendToServer()
+			end
 		end
 		num = num+1
 	end
@@ -1994,6 +2167,7 @@ function metadmin.question(tab)
 			answers[k] = answer[k]:GetValue()
 		end
 		net.Start("metadmin.answers")
+			net.WriteBool(false)
 			net.WriteTable(answers)
 		net.SendToServer()
 		Frame:Close()
@@ -2020,15 +2194,13 @@ function metadmin.viewanswers(tab)
 	function Frame.imgIcon:OnCursorExited()
 		self:SetCursor("arrow")
 	end
-	local menu
-	function Frame.imgIcon:OnMouseReleased(code)
-		if (code == MOUSE_LEFT) then
-			if IsValid(menu) then menu:Remove() end
-			menu = DermaMenu()
-			if Access("ma.setstattest") then
-				local sub, row = menu:AddSubMenu("Статус")
-				row:SetIcon(tab.answerstab.status == 1 and "icon16/tick.png" or tab.answerstab.status == 2 and "icon16/cross.png" or "icon16/help.png")
-				local row = sub:AddOption("Сдал", function()
+	if Access("ma.setstattest") then
+		local menu
+		function Frame.imgIcon:OnMouseReleased(code)
+			if (code == MOUSE_LEFT) then
+				if IsValid(menu) then menu:Remove() end
+				menu = DermaMenu()
+				local row = menu:AddOption("Сдал", function()
 					net.Start("metadmin.action")
 						net.WriteString(tab.sid)
 						net.WriteInt(5,5)
@@ -2038,7 +2210,7 @@ function metadmin.viewanswers(tab)
 					Frame:Close()
 				end)
 				row:SetIcon("icon16/tick.png")
-				local row = sub:AddOption("Не сдал", function()
+				local row = menu:AddOption("Не сдал", function()
 					net.Start("metadmin.action")
 						net.WriteString(tab.sid)
 						net.WriteInt(5,5)
@@ -2048,7 +2220,7 @@ function metadmin.viewanswers(tab)
 					Frame:Close()
 				end)
 				row:SetIcon("icon16/cross.png")
-				local row = sub:AddOption("На проверке", function()
+				local row = menu:AddOption("На проверке", function()
 					net.Start("metadmin.action")
 						net.WriteString(tab.sid)
 						net.WriteInt(5,5)
@@ -2059,10 +2231,28 @@ function metadmin.viewanswers(tab)
 				end)
 				row:SetIcon("icon16/help.png")
 			end
-			local row = menu:AddOption("Отмена")
-			row:SetIcon("icon16/cancel.png")
 			menu:Open()
 		end
+	end
+	local time = vgui.Create("DLabel",Frame)
+	time:SetSize(115,20)
+	time:SetPos(342,2)
+	time:SetText("Время игрока: "..string.ToMinutesSeconds(tab.answerstab.time))
+	time.UpdateColours = function( label, skin )
+		label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+	end
+	if not tab.timelimit or tab.timelimit == 0 then tab.timelimit = false end
+	if tab.timelimit then
+		if tab.timelimit < tab.answerstab.time then
+			time:SetColor(Color(255,0,0))
+		end
+		local recomtime = vgui.Create("DLabel",Frame)
+		recomtime:SetSize(150,20)
+		recomtime:SetPos(610,2)
+		recomtime.UpdateColours = function( label, skin )
+			label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+		end
+		recomtime:SetText("Рекомендуемое время: "..string.ToMinutesSeconds(tab.timelimit))
 	end
 	local DScrollPanel = vgui.Create("DScrollPanel",Frame)
 	DScrollPanel:SetSize(790,math.min(540,60+40*maxn))
@@ -2077,7 +2267,7 @@ function metadmin.viewanswers(tab)
 		question:SetSize(760,20)
 		question:SetPos(5,5+num*40)
 		local quest = tab.questions[k]
-		question:SetText((isstring(quest) and quest or quest.question)..":")
+		question:SetText((isstring(quest) and quest or quest.question)..": ")
 		local answer = vgui.Create("DTextEntry",DPanel)
 		answer:SetPos(5,25+num*40)
 		answer:SetSize(760,20)
@@ -2094,6 +2284,91 @@ function metadmin.viewanswers(tab)
 		RunConsoleCommand("ulx","prid",tab.sid)
 	end
 end
+
+metadmin.blank = {}
+function metadmin.viewblank(tab)
+	if not tab or IsValid(metadmin.blank.Frame) then return end
+	metadmin.blank.answers = {}
+	local maxn = #tab.questions
+	metadmin.blank.Frame = vgui.Create("DFrame")
+	metadmin.blank.Frame:SetSize(800,math.min(580,60+40*maxn))
+	metadmin.blank.Frame:SetTitle("Ответы игрока "..tab.nick.."("..tab.sid..")")
+	metadmin.blank.Frame.btnMaxim:SetVisible(false)
+	metadmin.blank.Frame.btnMinim:SetVisible(false)
+	metadmin.blank.Frame:SetDraggable(true)
+	metadmin.blank.Frame:Center()
+	metadmin.blank.Frame:MakePopup()
+	function metadmin.blank.Frame:OnClose()
+		print(metadmin.target)
+		if IsValid(metadmin.target) then
+			net.Start("metadmin.viewblank")
+				net.WriteBool(false)
+				net.WriteEntity(metadmin.target)
+			net.SendToServer()
+			print("ЗАКРЫТЬ")
+		end
+	end
+	if not tab.timelimit or tab.timelimit == 0 then tab.timelimit = false end
+	local time = vgui.Create("DLabel",metadmin.blank.Frame)
+	time:SetSize(115,20)
+	time:SetPos(342,2)
+	time.UpdateColours = function( label, skin )
+		label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+	end
+	time.Think = function(self)
+		local time = (os.time()-tab.starttime)
+		if tab.timelimit and time > tab.timelimit then
+			self:SetColor(Color(255,0,0))
+		end
+		self:SetText("Текущее время: "..string.ToMinutesSeconds(time))
+	end
+	if tab.timelimit then
+		local recomtime = vgui.Create("DLabel",metadmin.blank.Frame)
+		recomtime:SetSize(150,20)
+		recomtime:SetPos(615,2)
+		recomtime.UpdateColours = function( label, skin )
+			label:SetTextStyleColor( skin.Colours.Window.TitleActive )
+		end
+		recomtime:SetText("Рекомендуемое время: "..string.ToMinutesSeconds(tab.timelimit))
+	end
+	local DScrollPanel = vgui.Create("DScrollPanel",metadmin.blank.Frame)
+	DScrollPanel:SetSize(790,math.min(540,60+40*maxn))
+	DScrollPanel:SetPos(1,25)
+	local DPanel = vgui.Create("DPanel",DScrollPanel)
+	DPanel:SetPos(5,5)
+	DPanel:SetSize(790,20+40*maxn)
+	DLabel:SetDark(1)
+	local num = 0
+	for k=1,maxn do
+		local question = vgui.Create("DLabel",DPanel)
+		question:SetSize(760,20)
+		question:SetPos(5,5+num*40)
+		local quest = tab.questions[k]
+		question:SetText((isstring(quest) and quest or quest.question)..": ")
+		metadmin.blank.answers[k] = vgui.Create("DTextEntry",DPanel)
+		metadmin.blank.answers[k]:SetPos(5,25+num*40)
+		metadmin.blank.answers[k]:SetSize(760,20)
+		metadmin.blank.answers[k]:SetEditable(false)
+		num = num+1
+	end
+end
+
+net.Receive("metadmin.viewblank", function()
+	local bool = net.ReadBool()
+	if bool then
+		if IsValid(metadmin.blank.Frame) then metadmin.blank.Frame:Close() end
+		return
+	end
+	local tab = net.ReadTable()
+	if not IsValid(metadmin.blank.Frame) then
+		if not tab.questions then return end
+		metadmin.target = net.ReadEntity()
+		metadmin.viewblank(tab)
+	end
+	for k,v in pairs(tab.answers) do
+		metadmin.blank.answers[k]:SetText(v)
+	end
+end)
 
 function metadmin.questions2(id,type,ply)
 	local tab = metadmin.questions[id].questions
@@ -2126,7 +2401,7 @@ function metadmin.questions2(id,type,ply)
 			local question = vgui.Create("DLabel",DPanel)
 			question:SetSize(760,20)
 			question:SetPos(5,5+num*20)
-			question:SetText(k.."."..(isstring(v) and v or v.question))
+			question:SetText(k..". "..(isstring(v) and v or v.question))
 			if istable(v) then
 				for k2,v2 in pairs(v.answers) do
 					local answer = vgui.Create("DLabel",DPanel)
