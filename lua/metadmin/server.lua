@@ -345,7 +345,7 @@ hook.Add("CheckPassword","MetAdmin.MAG", function(steamid64, ip, sv_password, cl
 	if metadmin.MAGEnabled and metadmin.MAG then
 		local sid = util.SteamIDFrom64(steamid64)
 		local found
-		for k,v in SortedPairsByMemberValue(metadmin.MAG,"unban_date",true) do
+		for k,v in pairs(metadmin.MAG) do
 			if v.steamid == sid and (v.unban_date == false or v.unban_date > os.time()) then
 				found = v
 				break
